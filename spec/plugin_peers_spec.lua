@@ -31,7 +31,7 @@ if arg and arg[0] and arg[0]:match("plugin_peers_spec%.lua$") then
         passed = passed + 1
     end
     local root = arg[0]:match("(.*)[/\\]") or "."
-    package.path = package.path .. ";" .. root .. "/?.lua;" .. root .. "/spec/?.lua"
+    package.path = package.path .. ";" .. root .. "/?.lua;" .. root .. "/../?.lua"
     run_tests(function() end, assert_true)
     print(string.format("Results: %d passed, %d failed", passed, failed))
     os.exit(failed > 0 and 1 or 0)

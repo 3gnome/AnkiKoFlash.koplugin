@@ -1,0 +1,25 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install LuaJIT
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes luajit
+
+      - name: Run checks
+        env:
+          LUAJIT_BIN: luajit
+        run: bash _check.sh

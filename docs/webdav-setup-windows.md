@@ -198,10 +198,10 @@ This rewrites config, recreates the task and firewall rule (when permitted), and
 
 ## Related
 
-- [Getting started](getting-started.md) — AnkiKOAi + AnkiConnect on the same LAN
-- [Plugin configuration](plugin-configuration.md) — API keys, decks, sync behavior
+- [Getting started](getting-started.md) — AnkiKoFlash + AnkiConnect on the same LAN
+- [Plugin configuration](plugin-configuration.md) — decks, note types, sync behavior
 - Tag Bank Highlight Sync plugin — cloud folder, library export to `library/`
 
 ## Unrelated: Bookshelf / Cover Browser lag
 
-Slow paging when scrolling through a large library in **[Bookshelf](https://github.com/AndyHazz/bookshelf.koplugin)** (with **CoverBrowser** enabled) is **not** caused by AnkiKOAi or Tag Bank — neither plugin hooks library pagination. Bookshelf depends on CoverBrowser for covers and metadata; large libraries pay a per-page cache cost. Update Bookshelf, tune `cover_cache_mb` in Bookshelf settings, or temporarily disable Bookshelf to confirm.
+Slow paging when scrolling through a large library in **[Bookshelf](https://github.com/AndyHazz/bookshelf.koplugin)** (with **CoverBrowser** enabled) is **not** caused by AnkiKoFlash or Tag Bank — neither plugin hooks library pagination. Bookshelf depends on CoverBrowser for covers and metadata; large libraries pay a per-page cache cost. Update Bookshelf, tune `cover_cache_mb` in Bookshelf settings, or temporarily disable Bookshelf to confirm.

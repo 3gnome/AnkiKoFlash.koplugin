@@ -38,142 +38,23 @@ Note type name must be exactly: **Memorization**
 
 ## 2. Line card — front template
 
-```html
-{{#Target}}
-<div class="poem-card poem-card--line">
-  {{#Context}}<div class="context">{{Context}}</div>{{/Context}}
-  {{^Context}}<div class="context context--hint">Beginning of piece</div>{{/Context}}
-  <div class="prompt">Recite the next part aloud.</div>
-  <div class="title-ref">{{Title}}</div>
-</div>
-{{/Target}}
-```
+Open **`docs/desktop/memorization-anki-templates.txt`** → **PART 2** and paste into **Cards → Line → Front Template**.
 
 ## 3. Line card — back template
 
-```html
-{{#Target}}
-<div class="answer">{{Target}}</div>
-{{type:Target}}
-<div class="source">{{Source}}</div>
-{{/Target}}
-```
-
-Remove the `{{type:Target}}` line if you do not want typing checks.
+Open **`docs/desktop/memorization-anki-templates.txt`** → **PART 3** and paste into **Cards → Line → Back Template**. Remove the `{{type:Target}}` line if you do not want typing checks.
 
 ## 4. Full card — front template
 
-```html
-{{#FullRecite}}
-<div class="poem-card poem-card--full">
-  <div class="prompt">Recite from memory:</div>
-  <div class="title">{{Title}}</div>
-</div>
-{{/FullRecite}}
-```
+Open **`docs/desktop/memorization-anki-templates.txt`** → **PART 4** and paste into **Cards → Full → Front Template**.
 
 ## 5. Full card — back template
 
-```html
-{{#FullRecite}}
-<div class="full-text">{{FullText}}</div>
-<div class="source">{{Source}}</div>
-{{/FullRecite}}
-```
-
----
+Open **`docs/desktop/memorization-anki-templates.txt`** → **PART 5** and paste into **Cards → Full → Back Template**.
 
 ## 6. Styling
 
-Paste into **Cards → Styling** (both card types share this):
-
-```css
-.card {
-  --bg: #f6f3ec;
-  --paper: #fffdf8;
-  --ink: #1a1816;
-  --muted: #6f6a62;
-  --hairline: #e3ddd2;
-  --accent: #7a5b24;
-  font-family: Georgia, "Palatino Linotype", "Times New Roman", serif;
-  font-size: 19px;
-  line-height: 1.65;
-  color: var(--ink);
-  background: var(--bg);
-}
-
-.card.nightMode {
-  --bg: #101214;
-  --paper: #171a1d;
-  --ink: #eceff2;
-  --muted: #a3a9af;
-  --hairline: #2a3036;
-  --accent: #d4b06a;
-}
-
-.poem-card {
-  max-width: 680px;
-  margin: 20px auto;
-  padding: 28px 24px;
-  background: var(--paper);
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-}
-
-.poem-card--line .context {
-  white-space: pre-line;
-  font-style: italic;
-  color: var(--muted);
-  margin-bottom: 18px;
-  line-height: 1.6;
-}
-
-.context--hint {
-  font-style: normal;
-  font-size: 0.9em;
-}
-
-.prompt {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-
-.title-ref, .poem-card--full .title {
-  font-size: 1.05em;
-  color: var(--accent);
-}
-
-.answer, .full-text {
-  white-space: pre-line;
-  font-size: 1.15em;
-  line-height: 1.75;
-}
-
-.poem-card--full {
-  text-align: center;
-  padding: 36px 24px;
-}
-
-.poem-card--full .title {
-  font-size: 1.4em;
-  font-weight: 700;
-}
-
-.source {
-  margin-top: 16px;
-  font-size: 0.88em;
-  color: var(--muted);
-}
-
-.typeGood { color: #2d6a2d; }
-.typeBad  { color: #9b2c2c; }
-.typeMissed { color: #9b2c2c; }
-```
+Open **`docs/desktop/memorization-anki-templates.txt`** → **PART 6** and paste into **Cards → Styling** (both card types share this).
 
 ---
 
@@ -305,7 +186,7 @@ memorize = {
 },
 ```
 
-On-device keys for Card defaults: `wiki_deck`, `vocabulary_deck`, `memorize_parent_deck`, `memorize_model`, `auto_send_memorization`, `memorize_quick_highlight_button`, `auto_send_skip_hub_submenu`. Where cards go: `subdeck_by_book`, `per_book_decks`. Deck picker shortcuts: `favorite_decks`, `recent_decks`.
+On-device keys for Card defaults: `vocabulary_deck`, `memorize_parent_deck`, `memorize_model`, `auto_send_memorization`, `memorize_quick_highlight_button`, `auto_send_skip_hub_submenu`. Where cards go: `subdeck_by_book`, `per_book_decks`. Deck picker shortcuts: `favorite_decks`, `recent_decks`.
 
 Tags added automatically:
 
@@ -339,9 +220,8 @@ All templates and extended deck-option notes in one file:
 
 - **`docs/desktop/memorization-anki-templates.txt`** (also **`anki-memorization-setup.txt`** at plugin root)
 
-Wiki and Vocabulary Card templates:
+Vocabulary Card templates:
 
-- **`docs/desktop/wiki-card-anki-templates.txt`**
 - **`docs/desktop/vocabulary-card-anki-templates.txt`**
 
-Formatted guides: [Anki: Wiki Card setup](anki-vocabulary.md), [Vocabulary Card](anki-vocabulary-card.md)
+Formatted guide: [Vocabulary Card](anki-vocabulary-card.md)

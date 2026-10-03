@@ -1,41 +1,43 @@
-# AnkiKOAi — short summary of the plugin and recent work
+# AnkiKoFlash — short summary of the plugin and recent work
 
 ## What the plugin is
 
-**AnkiKOAi** ([`AnkiKOAi.koplugin`](../), v1.0.9) is a KOReader plugin that turns reading highlights into Anki cards and sends them over Wi‑Fi via **AnkiConnect**.
+**AnkiKoFlash** ([`AnkiKoFlash.koplugin`](../), v1.1.1) is a KOReader plugin that turns reading highlights into Anki cards and sends them over Wi‑Fi via **AnkiConnect**.
 
 **Reading flow:**
 
 ```mermaid
 flowchart LR
     select[Select text or highlight]
-    hub[AnkiKOAi hub menu]
-    gen[Generate card]
-    queue[Local queue ankikooai_cards.json]
+    hub[AnkiKoFlash hub menu]
+    gen[Build card from dictionary]
+    queue[Local queue ankikoflash_cards.json]
     anki[Desktop Anki via AnkiConnect]
 
     select --> hub --> gen --> queue --> anki
 ```
 
-**Three card types:**
+**Two card types:**
 
 | Type | What it does |
 |------|----------------|
-| **Wiki Card (AI)** | Wikipedia/Wiktionary context + AI article on the back |
-| **Vocabulary Card** | KOReader dictionary lookup only (no AI) |
+| **Vocabulary Card** | KOReader dictionary lookup + offline etymology on the back |
 | **Memorization Card** | LPCG-style step cards + full recitation for poetry/prose |
 
-**Core Lua modules** (33 files at repo root):
+**Core Lua modules:**
 
 - [`main.lua`](../main.lua) — plugin entry, highlight-menu hooks, card flows
-- [`plugin_menu.lua`](../plugin_menu.lua) — AnkiKOAi hub menu
-- [`card_generator.lua`](../card_generator.lua) / [`anki_sync.lua`](../anki_sync.lua) — AI generation + AnkiConnect HTTP
+- [`plugin_menu.lua`](../plugin_menu.lua) — AnkiKoFlash hub menu
+- [`dictionary_lookup.lua`](../dictionary_lookup.lua) / [`etymology_lookup.lua`](../etymology_lookup.lua) — StarDict definition and offline etymology lookup
+- [`anki_sync.lua`](../anki_sync.lua) — AnkiConnect HTTP
 - [`card_storage.lua`](../card_storage.lua) / [`card_manager.lua`](../card_manager.lua) — pending queue, My Cards, batch send
 - [`highlight_inbox.lua`](../highlight_inbox.lua) — all highlights in book, multi-select, batch send/delete
-- [`settings_viewer.lua`](../settings_viewer.lua) — on-device settings (API keys, decks, note types)
+- [`settings_viewer.lua`](../settings_viewer.lua) — on-device settings (decks, note types)
 - [`selectable_menu.lua`](../selectable_menu.lua) — reusable checklist UI (select all, delete selected)
+- [`atomic_json.lua`](../atomic_json.lua) / [`card_sync.lua`](../card_sync.lua) — recoverable persistence and cloud queue merge
+- [`anki_retry.lua`](../anki_retry.lua) — read-only transient retry policy and safe send verification support
 
-**Highlight colors:** orange = pending in queue; green = sent to Anki (wiki). Tap green wiki highlights for “see Recently sent,” not the card viewer.
+**Highlight colors:** orange = pending in queue; green = sent to Anki. Tap green highlights for "see Recently sent," not the card viewer.
 
 **Dev setup:** WSL emulator via [`dev-start.sh`](../dev-start.sh); test book `alice.epub`; syncs plugin into `~/koreader-dev/plugins/`.
 
@@ -43,7 +45,7 @@ flowchart LR
 
 ## Companion: TagBankHighlightSync
 
-Not part of AnkiKOAi itself, but used alongside it in a typical setup ([`tagbankhighlightsync.koplugin`](https://github.com/3gnome/tagbankhighlightsync.koplugin) sibling repo):
+Not part of AnkiKoFlash itself, but used alongside it in a typical setup ([`tagbankhighlightsync.koplugin`](https://github.com/3gnome/tagbankhighlightsync.koplugin) sibling repo):
 
 - Tags highlights, syncs `*.sdr.json` to WebDAV, exports Obsidian library (`library/quotes/`, `tags/`, `books/`)
 - When **both** plugins are installed, TagBank settings use Anki-branded labels for orange/green filters; alone, labels stay neutral (`plugin_peers.lua` in TagBank repo)
@@ -53,7 +55,7 @@ flowchart LR
     koreader[KOReader highlights]
     json[WebDAV sidecar JSON]
     obsidian[Obsidian library markdown]
-    anki[Anki via AnkiKOAi]
+    anki[Anki via AnkiKoFlash]
 
     koreader --> json --> obsidian
     koreader --> anki
@@ -65,9 +67,9 @@ Obsidian export is **one-way** (KOReader → WebDAV → markdown). Delete-in-Obs
 
 ## Recent session work
 
-### AnkiKOAi
+### AnkiKoFlash
 
-1. **View All Highlights** — highlight menu and AnkiKOAi hub; **Switch book…**, **Sync All Highlights** (Tag Bank), live annotation discovery, delete + batch Anki send. Files: [`highlight_inbox.lua`](../highlight_inbox.lua), [`highlight_books.lua`](../highlight_books.lua), [`plugin_peers.lua`](../plugin_peers.lua).
+1. **View All Highlights** — highlight menu and AnkiKoFlash hub; **Switch book…**, **Sync All Highlights** (Tag Bank), live annotation discovery, delete + batch Anki send. Files: [`highlight_inbox.lua`](../highlight_inbox.lua), [`highlight_books.lua`](../highlight_books.lua), [`plugin_peers.lua`](../plugin_peers.lua).
 
 2. **Tag Bank companion docs** — [`docs/tag-bank-companion.md`](tag-bank-companion.md), [`docs/webdav-setup-windows.md`](webdav-setup-windows.md). Tag Bank repo: [tagbankhighlightsync.koplugin](https://github.com/3gnome/tagbankhighlightsync.koplugin).
 
@@ -75,13 +77,21 @@ Obsidian export is **one-way** (KOReader → WebDAV → markdown). Delete-in-Obs
 
 4. **Highlight cleanup** — [`highlight_cleanup.lua`](../highlight_cleanup.lua) removes orphan orange vocab/mem highlights after background Anki send (with spec).
 
+5. **Production hardening** — atomic/recoverable cards, settings, and cloud writes; retry-safe queue migration and memorization-aware cloud identity; verified send reconciliation; bounded/cancellable batch work; transactional settings; privacy-safe operational logs.
+
+6. **Memorization recovery** — sends are chunked at 50 notes, passages over the configurable 80-step default require confirmation without truncation, and partial sends remain pending until all notes are sent or verified.
+
+7. **Document-safe cleanup** — PDF/table positions use structural comparison, and Recently Sent cleanup requires the exact source document so another book cannot lose a matching highlight.
+
+8. **Dictionary-only rework** — removed all AI providers, API keys, prompts, and the Wiki Card flow; added offline **etymology** lookup plus the `Etymology` field on vocabulary cards; renamed the plugin to AnkiKoFlash with automatic migration of legacy `ankikooai_*` storage files.
+
 ### TagBankHighlightSync
 
 4. **Screenshot capture fix (Windows Desktop)** — `highlight_capture.lua`: stopped comparing KOReader color userdata to `nil` with `==` (crashed on BBRGB32); fixed `blitFrom` arg order; plain-text capture path.
 
 5. **Untagged Sync now** — library export for untagged highlights without requiring tags; unified upload/toast logic.
 
-6. **TagBank / Anki decoupling** — conditional settings labels when AnkiKOAi present vs absent.
+6. **TagBank / Anki decoupling** — conditional settings labels when AnkiKoFlash present vs absent.
 
 7. **WebDAV 404 on missing sidecar** — `cloudstorage_compat.lua`: remove bad `.temp` body after 404 so merge does not log invalid JSON (seen after Alice reset).
 
@@ -104,9 +114,9 @@ Obsidian export is **one-way** (KOReader → WebDAV → markdown). Delete-in-Obs
 
 | Goal | Path |
 |------|------|
-| Create a card from selection | Highlight menu → **AnkiKOAi** → card type |
-| View/delete all highlights in book | Highlight menu → **View All Highlights** (or AnkiKOAi hub → same) |
-| Pending queue / batch send | **AnkiKOAi → My Cards** or **Highlights and Cards** |
+| Create a card from selection | Highlight menu → **AnkiKoFlash** → card type |
+| View/delete all highlights in book | Highlight menu → **View All Highlights** (or AnkiKoFlash hub → same) |
+| Pending queue / batch send | **AnkiKoFlash → My Cards** or **Highlights and Cards** |
 | Tagged quotes → Obsidian | TagBank sync (separate plugin); vault = WebDAV `library/` |
 | Dev test | `bash dev-start.sh --emulator alice.epub` |
 
@@ -114,4 +124,4 @@ Obsidian export is **one-way** (KOReader → WebDAV → markdown). Delete-in-Obs
 
 ## Repo state note
 
-Much of the recent work above may be **uncommitted** local changes across both plugins. Never commit `configuration.lua`, `LOCAL_DEV.md`, or API keys.
+Much of the recent work above may be **uncommitted** local changes across both plugins. Never commit `configuration.lua`, `LOCAL_DEV.md`, or local settings.

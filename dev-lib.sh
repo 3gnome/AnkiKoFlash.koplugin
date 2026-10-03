@@ -1,11 +1,18 @@
 # Shared KOReader dev helpers (source from start.sh / dev-start.sh; not executed directly).
-# Sets: KOREADER, ANKIKOOAI_*, TAGBANKHIGHLIGHTSYNC_* (HIGHLIGHTSYNC_* kept as legacy aliases)
+# Sets: KOREADER, ANKIKOFLASH_*, TAGBANKHIGHLIGHTSYNC_* (HIGHLIGHTSYNC_* kept as legacy aliases)
 
 : "${KOREADER:="${KOREADER_DIR:-$HOME/koreader-dev/emulator/usr/lib/koreader}"}"
+# OCR harness capture dir (Windows-hosted, reached from WSL via /mnt/c). The
+# dev-capture.lua watcher is a no-op unless this is set. Set it to your capture
+# folder to turn the watcher on during dev, e.g.
+#   export KOREADER_CAPTURE_DIR=/mnt/c/Users/<you>/Dev/koreader-dev/.qa-frames
+# (Kept unset by default so no personal path is committed.)
+: "${KOREADER_CAPTURE_DIR:=}"
+export KOREADER_CAPTURE_DIR
 _DEV_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-: "${ANKIKOOAI_SRC:="${_DEV_LIB_DIR:-.}"}"
-: "${TAGBANKHIGHLIGHTSYNC_SRC:="$(dirname "${ANKIKOOAI_SRC}")/tagbankhighlightsync.koplugin"}"
-: "${ANKIKOOAI_DST:="$HOME/koreader-dev/plugins/AnkiKOAi.koplugin"}"
+: "${ANKIKOFLASH_SRC:="${_DEV_LIB_DIR:-.}"}"
+: "${TAGBANKHIGHLIGHTSYNC_SRC:="$(dirname "${ANKIKOFLASH_SRC}")/tagbankhighlightsync.koplugin"}"
+: "${ANKIKOFLASH_DST:="$HOME/koreader-dev/plugins/AnkiKoFlash.koplugin"}"
 : "${TAGBANKHIGHLIGHTSYNC_DST:="$HOME/koreader-dev/plugins/tagbankhighlightsync.koplugin"}"
 # Legacy env names (still accepted)
 : "${HIGHLIGHTSYNC_SRC:="$TAGBANKHIGHLIGHTSYNC_SRC"}"
@@ -60,9 +67,10 @@ export_wsl_gui_env() {
     export DISPLAY="${DISPLAY:-:0}"
     export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}"
-    export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
-    export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-llvmpipe}"
-    export SDL_RENDER_DRIVER="${SDL_RENDER_DRIVER:-software}"
+    # Let SDL3/Mesa use the WSLg d3d12 hardware driver. Forcing llvmpipe here
+    # (LIBGL_ALWAYS_SOFTWARE=1, MESA_LOADER_DRIVER_OVERRIDE=llvmpipe,
+    # SDL_RENDER_DRIVER=software) triggered WSLg "[WARN:COPY MODE]".
+    # To force software rendering, export those vars yourself before launching.
 }
 
 resolve_book() {
@@ -103,11 +111,11 @@ link_plugin_to_emulator() {
     ln -sfn "$dst" "$link_path"
 }
 
-sync_ankikooai() {
-    local src="${1:-$ANKIKOOAI_SRC}"
-    local dst="${2:-$ANKIKOOAI_DST}"
+sync_ankikoflash() {
+    local src="${1:-$ANKIKOFLASH_SRC}"
+    local dst="${2:-$ANKIKOFLASH_DST}"
     if [ ! -d "$src" ]; then
-        echo "ERROR: AnkiKOAi source not found at: $src" >&2
+        echo "ERROR: AnkiKoFlash source not found at: $src" >&2
         exit 1
     fi
     mkdir -p "$dst"
@@ -120,8 +128,8 @@ sync_ankikooai() {
     elif [ -f "$src/configuration.lua.sample" ]; then
         cp "$src/configuration.lua.sample" "$dst/configuration.lua"
     fi
-    link_plugin_to_emulator "$dst" "AnkiKOAi.koplugin"
-    echo "Synced AnkiKOAi → $dst" >&2
+    link_plugin_to_emulator "$dst" "AnkiKoFlash.koplugin"
+    echo "Synced AnkiKoFlash → $dst" >&2
 }
 
 sync_tagbankhighlightsync() {
@@ -152,7 +160,7 @@ sync_both_plugins() {
         echo "Set KOREADER_DIR to your emulator install." >&2
         exit 1
     fi
-    sync_ankikooai
+    sync_ankikoflash
     sync_tagbankhighlightsync
 }
 

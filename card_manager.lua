@@ -11,10 +11,8 @@ local Event          = require("ui/event")
 local CardStorage    = require("card_storage")
 local AnkiSync       = require("anki_sync")
 local CardDefaults   = require("card_defaults")
-local CardGenerator  = require("card_generator")
 local CardFields     = require("card_fields")
 local CardViewer     = require("card_viewer")
-local NetworkMgr     = require("ui/network/manager")
 local SendFlow       = require("send_flow")
 local PluginConstants = require("plugin_constants")
 local Nav             = require("nav")
@@ -23,6 +21,7 @@ local HighlightInbox  = require("highlight_inbox")
 local UiBusy            = require("ui_busy")
 local CardReconcile     = require("card_reconcile")
 local HighlightStatus   = require("highlight_status")
+local MemorizationResult = require("memorization_result")
 
 local InfoMessage   = require("ui/widget/infomessage")
 
@@ -50,7 +49,7 @@ local function clear_batch_progress()
     end
 end
 
--- progress_ctx: { total, offset, label } — offset adds wiki/vocab count before mem phase.
+-- progress_ctx: { total, offset, label } — offset adds vocab count before mem phase.
 local function show_batch_progress(progress_ctx, current)
     if not progress_ctx or progress_ctx.total <= 0 then return end
     if batch_progress_notif then UIManager:close(batch_progress_notif) end
@@ -86,46 +85,107 @@ end
 
 local function is_anki_ready(anki_config)
     return anki_config.url
-        and anki_config.url ~= ""
-        and not anki_config.url:find("192.168.x.x", 1, true)
+        and not PluginConstants.is_placeholder_anki_url(anki_config.url)
 end
 
 function CardManager.count_unsent()
     return CardStorage.count_unsent()
 end
 
-local function send_memorization_card(anki_config, base_config, card, send_ui, done, quiet, storage_idx)
+local function send_memorization_card(anki_config, base_config, card, send_ui, done,
+    quiet, storage_idx, threshold_confirmed, allow_threshold_prompt)
     if not is_anki_ready(anki_config) then
         if not quiet then
-            notify_error(_("Anki URL not set. Use AnkiKOAi → Settings."))
+            notify_error(_("Anki URL not set. Use AnkiKoFlash → Settings."))
         end
         if done then done(false, "Anki URL not set") end
         return
     end
     local PoetryMemorize = require("poetry_memorize")
+    local mem_cfg = PoetryMemorize.config(base_config)
+    local mem_lines = PoetryMemorize.split_units(
+        PoetryMemorize.prepare_text(card.memorization_text), mem_cfg)
+    if PoetryMemorize.requires_step_confirmation(mem_lines, mem_cfg)
+        and not threshold_confirmed then
+        local threshold_info = {
+            requires_confirmation = true,
+            step_count = #mem_lines,
+            max_steps = mem_cfg.max_memorization_steps,
+            all_sent = false,
+            partial = false,
+        }
+        if not quiet or allow_threshold_prompt then
+            UIManager:show(ConfirmBox:new {
+                text = _("This memorization passage has ") .. tostring(#mem_lines)
+                    .. _(" steps (limit: ")
+                    .. tostring(mem_cfg.max_memorization_steps)
+                    .. _("). Send all steps without truncating?"),
+                ok_text = _("Send all steps"),
+                ok_callback = function()
+                    send_memorization_card(anki_config, base_config, card, send_ui,
+                        done, quiet, storage_idx, true, allow_threshold_prompt)
+                end,
+                cancel_callback = function()
+                    if done then
+                        done(false, _("Large memorization passage kept pending."),
+                            threshold_info)
+                    end
+                end,
+            })
+        elseif done then
+            done(false, _("Large memorization passage requires confirmation."),
+                threshold_info)
+        end
+        return
+    end
     local meta = {
         book_title  = card.book_title,
         book_author = card.book_author,
         source      = card.source,
         title       = card.phrase or "",
+        document_path = card.document_path,
+        highlight_pos0 = card.highlight_pos0,
+        highlight_pos1 = card.highlight_pos1,
         deck        = (card.memorization_deck and card.memorization_deck ~= "")
                       and card.memorization_deck or nil,
+        threshold_confirmed = threshold_confirmed == true,
     }
     PoetryMemorize.send_highlight(base_config, card.memorization_text, send_ui, meta,
         function(ok, err_or_msg, info)
-            if ok then
+            if MemorizationResult.should_reconcile(ok, info) then
                 local deck = (info and info.deck) or meta.deck
                     or CardDefaults.memorization_parent_deck({ anki = anki_config })
                     or ""
-                CardReconcile.finish({ card = card }, anki_config, send_ui, {
-                    status = "sent",
+                local reconcile_status = (info and (info.sent or 0) == 0
+                    and (info.already_present or 0) > 0)
+                    and "already_in_anki" or "sent"
+                local reconcile_ok, _queue_state, reconcile_warning =
+                    CardReconcile.finish(
+                    { card = card }, anki_config, send_ui, {
+                    status = reconcile_status,
                     deck   = deck,
                 })
-                if not quiet then notify(err_or_msg or _("Sent!")) end
+                if not reconcile_ok then
+                    ok = false
+                    err_or_msg = _(
+                        "Sent to Anki, but the local queue could not be updated.")
+                elseif reconcile_warning then
+                    info = info or {}
+                    info.reconcile_warning = reconcile_warning
+                    err_or_msg = (err_or_msg and err_or_msg ~= "")
+                        and (err_or_msg .. "\n"
+                            .. reconcile_warning.warning_message)
+                        or reconcile_warning.warning_message
+                end
+                if not quiet then
+                    if ok then notify(err_or_msg or _("Sent!"))
+                    else notify_error(err_or_msg or _("Send failed")) end
+                end
             else
+                ok = false
                 if not quiet then notify_error(err_or_msg or _("Send failed")) end
             end
-            if done then done(ok, err_or_msg) end
+            if done then done(ok, err_or_msg, info) end
         end)
 end
 
@@ -149,7 +209,7 @@ local function resolve_send_target(anki_config, card)
     return deck_name, model, phrase
 end
 
-local function filter_unsent_wiki_vocab_picked(picked)
+local function filter_unsent_vocab_picked(picked)
     local batch, skipped_mem = {}, 0
     for _i, entry in ipairs(picked or {}) do
         local card = entry.data.card
@@ -171,7 +231,8 @@ local function notify_check_skips(skipped_mem)
     end
 end
 
-local function format_check_message(found, not_found)
+local function format_check_message(found, not_found, history_warnings)
+    history_warnings = tonumber(history_warnings) or 0
     local parts = {}
     if found > 0 then
         table.insert(parts, tostring(found) .. _(" found in Anki"))
@@ -181,24 +242,34 @@ local function format_check_message(found, not_found)
     end
     if #parts == 0 then return _("No pending cards to check.") end
     local msg = table.concat(parts, ", ")
-    if found > 0 then
+    if found > history_warnings then
         msg = msg .. " — " .. _("see Recently sent")
+    end
+    if history_warnings > 0 then
+        msg = msg .. "; "
+            .. CardReconcile.history_warning_message(history_warnings)
     end
     return msg
 end
 
 local function run_check_items(anki_config, items, opts, on_complete)
-    local found, not_found = 0, 0
+    local found, not_found, history_warnings = 0, 0, 0
     local pos = 1
     local socket = require("socket")
 
     local function check_next()
         if pos > #items then
             if not opts.background then
-                notify(format_check_message(found, not_found))
+                notify(format_check_message(found, not_found, history_warnings))
             end
-            if on_complete then on_complete(found, not_found) end
-            if opts.on_done then opts.on_done(found, not_found) end
+            if on_complete then
+                on_complete(found, not_found, history_warnings)
+            end
+            if opts.on_done then
+                opts.on_done(found, not_found, {
+                    history_warnings = history_warnings,
+                })
+            end
             return
         end
         local item = items[pos]
@@ -208,15 +279,30 @@ local function run_check_items(anki_config, items, opts, on_complete)
         if not deck_name or deck_name == "" or phrase == "" then
             not_found = not_found + 1
         else
+            local expected_fields =
+                AnkiSync.fields_for_verification(anki_config, card, model)
             local exists = AnkiSync.note_exists_in_deck(
-                anki_config.url, deck_name, model, phrase, "Phrase")
+                anki_config.url, deck_name, model, phrase, "Phrase",
+                expected_fields)
             if exists then
-                CardReconcile.finish(item, anki_config, opts.ui, {
-                    status = "checked",
-                    deck   = deck_name,
-                    model  = model,
-                })
-                found = found + 1
+                local reconcile_ok, _queue_state, reconcile_warning =
+                    CardReconcile.finish(item, anki_config, opts.ui, {
+                        status = "checked",
+                        deck   = deck_name,
+                        model  = model,
+                    })
+                if reconcile_ok then
+                    found = found + 1
+                    if reconcile_warning then
+                        history_warnings = history_warnings + 1
+                    end
+                else
+                    not_found = not_found + 1
+                    if not opts.background then
+                        notify_error(_(
+                            "Found in Anki, but the local queue could not be updated."))
+                    end
+                end
             else
                 not_found = not_found + 1
             end
@@ -229,19 +315,21 @@ local function run_check_items(anki_config, items, opts, on_complete)
 
     if #items == 0 then
         if not opts.background then notify(_("No pending cards to check.")) end
-        if on_complete then on_complete(0, 0) end
-        if opts.on_done then opts.on_done(0, 0) end
+        if on_complete then on_complete(0, 0, 0) end
+        if opts.on_done then
+            opts.on_done(0, 0, { history_warnings = 0 })
+        end
     else
         check_next()
     end
 end
 
--- Read-only Anki lookup for unsent wiki/vocab rows (no addNote).
+-- Read-only Anki lookup for unsent vocab rows (no addNote).
 function CardManager.check_items_against_anki(base_config, items, opts)
     opts = opts or {}
     local anki_config = effective_config(base_config)
     if not is_anki_ready(anki_config) then
-        notify_error(_("Anki URL not set. Use AnkiKOAi → Settings."))
+        notify_error(_("Anki URL not set. Use AnkiKoFlash → Settings."))
         if opts.on_done then opts.on_done(0, 0) end
         return
     end
@@ -262,7 +350,9 @@ function CardManager.check_items_against_anki(base_config, items, opts)
     end
 end
 
-local function format_batch_message(sent, failed, reconciled, sync_suffix)
+local function format_batch_message(
+    sent, failed, reconciled, sync_suffix, detail, history_warnings)
+    history_warnings = tonumber(history_warnings) or 0
     local parts = {}
     if sent > 0 then
         table.insert(parts, tostring(sent) .. _(" sent"))
@@ -275,25 +365,28 @@ local function format_batch_message(sent, failed, reconciled, sync_suffix)
     end
     if #parts == 0 then return _("No pending cards to send.") end
     local msg = table.concat(parts, ", ")
-    if reconciled > 0 then
+    if sent + reconciled > history_warnings then
         msg = msg .. " — " .. _("see Recently sent")
     end
     if sent > 0 and sync_suffix and sync_suffix ~= "" then
         msg = msg .. sync_suffix
     end
+    if detail and detail ~= "" then msg = msg .. "; " .. detail end
     return msg
 end
 
--- Wiki/vocab batch: items are { card, storage_idx }.
-local function send_wiki_vocab_items(anki_config, ui, items, on_complete, progress_ctx)
+-- Vocabulary batch: items are { card, storage_idx }.
+local function send_vocab_items(anki_config, ui, items, on_complete, progress_ctx)
     local sent, failed, reconciled = 0, 0, 0
+    local history_warnings = 0
     local last_deck, last_model
     local pos = 1
 
     local function send_next()
         if pos > #items then
             if on_complete then
-                on_complete(sent, failed, reconciled, last_deck, last_model)
+                on_complete(sent, failed, reconciled, last_deck, last_model,
+                    history_warnings)
             end
             return
         end
@@ -315,24 +408,40 @@ local function send_wiki_vocab_items(anki_config, ui, items, on_complete, progre
         local mark_deck = deck_name or deck
         local mark_model = model_name or model
         if status == "sent" then
-            CardReconcile.finish(item, anki_config, ui, {
-                status = "sent",
-                deck   = mark_deck,
-                model  = mark_model,
-            })
-            sent = sent + 1
-            last_deck = mark_deck
-            last_model = mark_model
+            local reconcile_ok, _queue_state, reconcile_warning =
+                CardReconcile.finish(item, anki_config, ui, {
+                    status = "sent",
+                    deck   = mark_deck,
+                    model  = mark_model,
+                })
+            if reconcile_ok then
+                sent = sent + 1
+                if reconcile_warning then
+                    history_warnings = history_warnings + 1
+                end
+                last_deck = mark_deck
+                last_model = mark_model
+            else
+                failed = failed + 1
+            end
         elseif status == "duplicate" or status == "verified" then
             local reconcile_status = (status == "duplicate") and "already_in_anki" or "verified"
-            CardReconcile.finish(item, anki_config, ui, {
-                status = reconcile_status,
-                deck   = mark_deck,
-                model  = mark_model,
-            })
-            reconciled = reconciled + 1
-            last_deck = mark_deck
-            last_model = mark_model
+            local reconcile_ok, _queue_state, reconcile_warning =
+                CardReconcile.finish(item, anki_config, ui, {
+                    status = reconcile_status,
+                    deck   = mark_deck,
+                    model  = mark_model,
+                })
+            if reconcile_ok then
+                reconciled = reconciled + 1
+                if reconcile_warning then
+                    history_warnings = history_warnings + 1
+                end
+                last_deck = mark_deck
+                last_model = mark_model
+            else
+                failed = failed + 1
+            end
         else
             failed = failed + 1
         end
@@ -340,34 +449,58 @@ local function send_wiki_vocab_items(anki_config, ui, items, on_complete, progre
     end
 
     if #items == 0 then
-        if on_complete then on_complete(0, 0, 0, nil, nil) end
+        if on_complete then on_complete(0, 0, 0, nil, nil, 0) end
     else
         send_next()
     end
 end
 
-local function finish_batch_send(anki_config, opts, sent, failed, reconciled, last_deck, last_model)
+local function finish_batch_send(anki_config, opts, sent, failed, reconciled,
+    last_deck, last_model, detail, history_warnings)
     clear_batch_progress()
     send_all_in_progress = false
+    local settings_saved, settings_error = true, nil
     if last_deck then
-        SendFlow.remember_send(anki_config, last_deck, last_model or anki_config.model)
+        local remembered, remember_reason = SendFlow.remember_send(
+            anki_config, last_deck, last_model or anki_config.model)
+        settings_saved, settings_error = remembered, remember_reason
+        if not remembered then
+            local warning = _(
+                "Recent deck settings could not be saved.")
+            detail = (detail and detail ~= "")
+                and (detail .. "; " .. warning) or warning
+        end
+    end
+    history_warnings = tonumber(history_warnings) or 0
+    if history_warnings > 0 then
+        local warning =
+            CardReconcile.history_warning_message(history_warnings)
+        detail = (detail and detail ~= "")
+            and (detail .. "; " .. warning) or warning
     end
     local sync_suffix = (sent > 0) and AnkiSync.sync_status_suffix(anki_config) or ""
-    local msg = format_batch_message(sent, failed, reconciled, sync_suffix)
+    local msg = format_batch_message(
+        sent, failed, reconciled, sync_suffix, detail, history_warnings)
     if not opts.background or sent > 0 or reconciled > 0 then
         notify(msg)
     end
-    if opts.on_done then opts.on_done(sent, failed, reconciled) end
+    if opts.on_done then
+        opts.on_done(sent, failed, reconciled, {
+            history_warnings = history_warnings,
+            settings_saved = settings_saved,
+            settings_error = settings_error,
+        })
+    end
 end
 
--- Send selected wiki/vocab items (shared batch path).
+-- Send selected vocab items (shared batch path).
 function CardManager.send_batch_items(base_config, ui, items, opts)
     opts = opts or {}
     if send_all_in_progress then return end
     local anki_config = effective_config(base_config)
     if not is_anki_ready(anki_config) then
         if not opts.background then
-            notify_error(_("Anki URL not set. Use AnkiKOAi → Settings."))
+            notify_error(_("Anki URL not set. Use AnkiKoFlash → Settings."))
         end
         if opts.on_done then opts.on_done(0, 0, 0) end
         return
@@ -383,8 +516,8 @@ function CardManager.send_batch_items(base_config, ui, items, opts)
         offset = 0,
         label  = _("Sending to Anki…"),
     } or nil
-    send_wiki_vocab_items(anki_config, ui, items, function(s, f, r, ld, lm)
-        finish_batch_send(anki_config, opts, s, f, r, ld, lm)
+    send_vocab_items(anki_config, ui, items, function(s, f, r, ld, lm, hw)
+        finish_batch_send(anki_config, opts, s, f, r, ld, lm, nil, hw)
     end, progress_ctx)
 end
 
@@ -398,7 +531,7 @@ function CardManager.send_all_unsent(base_config, ui, opts)
     local anki_config = effective_config(base_config)
     if not is_anki_ready(anki_config) then
         if not opts.background then
-            notify_error(_("Anki URL not set. Use AnkiKOAi → Settings."))
+            notify_error(_("Anki URL not set. Use AnkiKoFlash → Settings."))
         end
         if opts.on_done then opts.on_done(0, 0, 0) end
         return
@@ -435,6 +568,8 @@ function CardManager.send_all_unsent(base_config, ui, opts)
 
     send_all_in_progress = true
     local sent, failed, reconciled = 0, 0, 0
+    local partial_confirmed, partial_remaining, threshold_pending = 0, 0, 0
+    local history_warnings = 0
     local batch_last_deck, batch_last_model
     local total_batch = #pending_sync + #pending_mem
     local progress_ctx = (not opts.background) and {
@@ -445,8 +580,19 @@ function CardManager.send_all_unsent(base_config, ui, opts)
 
     local function run_memorization_at(index)
         if index > #pending_mem then
+            local details = {}
+            if partial_confirmed > 0 or partial_remaining > 0 then
+                details[#details + 1] = tostring(partial_confirmed)
+                    .. _(" memorization card(s) confirmed, ")
+                    .. tostring(partial_remaining) .. _(" remain pending")
+            end
+            if threshold_pending > 0 then
+                details[#details + 1] = tostring(threshold_pending)
+                    .. _(" large passage(s) kept pending")
+            end
             finish_batch_send(anki_config, opts, sent, failed, reconciled,
-                batch_last_deck, batch_last_model)
+                batch_last_deck, batch_last_model, table.concat(details, "; "),
+                history_warnings)
             return
         end
         if progress_ctx then
@@ -455,16 +601,36 @@ function CardManager.send_all_unsent(base_config, ui, opts)
         end
         local item = pending_mem[index]
         send_memorization_card(anki_config, base_config, item.card, ui,
-            function(ok)
-                if ok then sent = sent + 1 else failed = failed + 1 end
+            function(ok, _err, info)
+                local status = MemorizationResult.batch_status(ok, info)
+                if status == "reconciled" then
+                    reconciled = reconciled + 1
+                elseif status == "sent" then
+                    sent = sent + 1
+                elseif status == "pending" then
+                    threshold_pending = threshold_pending + 1
+                else
+                    failed = failed + 1
+                end
+                if info and info.reconcile_warning then
+                    history_warnings = history_warnings + 1
+                end
+                if info and info.partial then
+                    partial_confirmed = partial_confirmed
+                        + math.max(0, (info.total or 0) - (info.failed or 0))
+                    partial_remaining = partial_remaining + (info.failed or 0)
+                end
                 run_memorization_at(index + 1)
-            end, true, item.storage_idx)
+            end, true, item.storage_idx, false, not opts.background)
     end
 
-    local function after_wiki_vocab(s, f, r, last_deck, last_model)
+    local function after_vocab(
+        s, f, r, last_deck, last_model, history_warnings)
         sent = sent + s
         failed = failed + f
         reconciled = reconciled + r
+        history_warnings = history_warnings
+            + (tonumber(history_warnings) or 0)
         if last_deck then
             batch_last_deck = last_deck
             batch_last_model = last_model
@@ -473,11 +639,11 @@ function CardManager.send_all_unsent(base_config, ui, opts)
             run_memorization_at(1)
         else
             finish_batch_send(anki_config, opts, sent, failed, reconciled,
-                batch_last_deck, batch_last_model)
+                batch_last_deck, batch_last_model, nil, history_warnings)
         end
     end
 
-    send_wiki_vocab_items(anki_config, ui, pending_sync, after_wiki_vocab, progress_ctx)
+    send_vocab_items(anki_config, ui, pending_sync, after_vocab, progress_ctx)
 end
 
 local function send_one(anki_config, base_config, card, done, send_ui)
@@ -486,7 +652,7 @@ local function send_one(anki_config, base_config, card, done, send_ui)
         return
     end
     if not is_anki_ready(anki_config) then
-        notify_error(_("Anki URL not set. Use AnkiKOAi → Settings."))
+        notify_error(_("Anki URL not set. Use AnkiKoFlash → Settings."))
         if done then done(false, "Anki URL not set") end
         return
     end
@@ -584,8 +750,13 @@ local function show_recent_sent(on_back)
                 text = _("Clear all Recently sent entries? This cannot be undone."),
                 ok_text = _("Clear"),
                 ok_callback = function()
-                    CardStorage.clear_recent_sent()
-                    show_recent_sent(on_back)
+                    local cleared = CardStorage.clear_recent_sent()
+                    if cleared then
+                        show_recent_sent(on_back)
+                    else
+                        notify_error(_(
+                            "Could not clear Recently sent. Check device storage and retry."))
+                    end
                 end,
             })
         end,
@@ -747,10 +918,6 @@ function CardManager.show_manage(base_config, opts)
                 text           = _("Anki setup guides"),
                 sub_item_table = {
                     {
-                        text     = _("Wiki Card setup"),
-                        callback = function() show_readme_safe("wiki") end,
-                    },
-                    {
                         text     = _("Vocabulary Card setup"),
                         callback = function() show_readme_safe("vocabulary") end,
                     },
@@ -778,11 +945,15 @@ function CardManager.show_manage(base_config, opts)
                         ok_text     = _("Clear All"),
                         ok_callback = function()
                             UIManager:scheduleIn(0.05, function()
-                                pcall(function()
-                                    CardStorage.clear_all()
+                                local called, cleared =
+                                    pcall(CardStorage.clear_all)
+                                if called and cleared then
                                     notify(_("All cards cleared"))
                                     update_manage_clear_all_count()
-                                end)
+                                else
+                                    notify_error(_(
+                                        "Could not clear saved cards. Check device storage and retry."))
+                                end
                             end)
                         end,
                     })
@@ -935,8 +1106,9 @@ function CardManager.show(base_config, _filter_book, ui, opts)
                     end }},
                     {{ text = _("Delete"), callback = function()
                         UIManager:close(dialog)
-                        CardStorage.delete_card(storage_idx)
-                        notify(_("Deleted"))
+                        if CardStorage.delete_matching_card(card) then
+                            notify(_("Deleted"))
+                        end
                         if return_book then refresh_book_submenu(return_book) end
                     end }},
                     {{ text = _("Close"), callback = function()
@@ -985,49 +1157,6 @@ function CardManager.show(base_config, _filter_book, ui, opts)
                 on_update = function(updated_card)
                     CardStorage.update_card(card_ref.phrase, updated_card)
                     card_ref.phrase = updated_card.phrase
-                end,
-                on_regen_text = function()
-                    if viewer_ref[1] then UIManager:close(viewer_ref[1]) end
-                    local loading_t = Notification:new {
-                        text    = _("Refining article…"),
-                        timeout = 30,
-                    }
-                    UIManager:show(loading_t)
-                    NetworkMgr:runWhenOnline(function()
-                        UIManager:scheduleIn(0.05, function()
-                            UIManager:close(loading_t)
-                            local new_text, err = CardGenerator.generate_text(
-                                base_config, card.phrase, card)
-                            if not new_text then
-                                notify_error(_("Regen failed: ") .. (err or "unknown"))
-                                viewer_ref[1] = make_viewer(true)
-                                return
-                            end
-                            card.text = new_text
-                            CardFields.sync_flat_from_anki(card)
-                            CardStorage.update_card(card_ref.phrase, card)
-                            viewer_ref[1] = make_viewer(true)
-                        end)
-                    end)
-                end,
-                on_regen_ipa = function(new_phrase, updated_card, new_viewer)
-                    NetworkMgr:runWhenOnline(function()
-                        UIManager:scheduleIn(0.05, function()
-                            local ipa, err = CardGenerator.generate_ipa(base_config, new_phrase)
-                            if ipa then
-                                updated_card.ipa = ipa
-                                CardStorage.update_card(updated_card.phrase, updated_card)
-                                local still_shown = false
-                                for w in UIManager:topdown_widgets_iter() do
-                                    if w == new_viewer then still_shown = true; break end
-                                end
-                                if still_shown then new_viewer:update() end
-                                notify(_("IPA updated"))
-                            else
-                                notify_error(_("IPA regen failed: ") .. (err or "unknown"))
-                            end
-                        end)
-                    end)
                 end,
             }
             local send_cb = SendFlow.viewer_callbacks(anki_config, card, ui)
@@ -1093,7 +1222,7 @@ function CardManager.show(base_config, _filter_book, ui, opts)
                 bold = true,
                 callback = function()
                     UIManager:show(ConfirmBox:new {
-                        text = _("Check all pending cards in this book against Anki? Matches by Phrase in the target deck only. Does not create notes. Found cards are removed from the queue and logged to Recently sent."),
+                        text = _("Check all pending cards in this book against Anki? Matches the exact intended note type, deck, and card fields. Does not create notes. Found cards are removed from the queue and logged to Recently sent."),
                         ok_text = _("Check Anki"),
                         ok_callback = function()
                             CardManager.check_items_against_anki(base_config, pending_check_items, {
@@ -1151,13 +1280,18 @@ function CardManager.show(base_config, _filter_book, ui, opts)
             on_delete_selected = function(picked)
                 local indices = {}
                 for _i, entry in ipairs(picked) do
-                    table.insert(indices, entry.data.storage_idx)
+                    indices[#indices + 1] = entry.data.storage_idx
                 end
-                CardStorage.delete_indices(indices)
-                notify(tostring(#indices) .. _(" card(s) deleted"))
+                local deleted = CardStorage.delete_indices(indices)
+                if deleted then
+                    notify(tostring(#picked) .. _(" card(s) deleted"))
+                else
+                    notify_error(_(
+                        "Could not delete selected cards. Check device storage and retry."))
+                end
             end,
             on_send_selected = function(picked)
-                local batch, skipped_mem = filter_unsent_wiki_vocab_picked(picked)
+                local batch, skipped_mem = filter_unsent_vocab_picked(picked)
                 if #batch == 0 then
                     notify_check_skips(skipped_mem)
                     if skipped_mem == 0 then
@@ -1175,7 +1309,7 @@ function CardManager.show(base_config, _filter_book, ui, opts)
                 })
             end,
             on_check_anki_selected = function(picked)
-                local batch, skipped_mem = filter_unsent_wiki_vocab_picked(picked)
+                local batch, skipped_mem = filter_unsent_vocab_picked(picked)
                 if #batch == 0 then
                     notify_check_skips(skipped_mem)
                     if skipped_mem == 0 then
@@ -1193,14 +1327,21 @@ function CardManager.show(base_config, _filter_book, ui, opts)
                     end,
                 })
             end,
-            check_anki_selected_confirm = _("Check selected pending cards against Anki? Matches by Phrase in the target deck only. Does not create notes. Found cards are removed from the queue and logged to Recently sent."),
+            check_anki_selected_confirm = _("Check selected pending cards against Anki? Matches the exact intended note type, deck, and card fields. Does not create notes. Found cards are removed from the queue and logged to Recently sent."),
             on_remove_from_queue_selected = function(picked)
-                local removed = 0
+                local indices = {}
                 for _i, entry in ipairs(picked) do
-                    local card = entry.data.card
-                    if CardStorage.delete_matching_card(card) then
-                        removed = removed + 1
-                        if ui and card.highlight_pos0 then
+                    indices[#indices + 1] = entry.data.storage_idx
+                end
+                local removed = CardStorage.delete_indices(indices)
+                if removed then
+                    for _i, entry in ipairs(picked) do
+                        local card = entry.data.card
+                        local current_document =
+                            ui and ui.document and ui.document.file
+                        if card.highlight_pos0 and card.document_path
+                            and card.document_path ~= ""
+                            and card.document_path == current_document then
                             if CardStorage.is_memorization(card)
                                 or CardFields.is_dictionary_card(card, { anki = anki_config }) then
                                 HighlightStatus.remove_highlight(
@@ -1208,19 +1349,28 @@ function CardManager.show(base_config, _filter_book, ui, opts)
                             end
                         end
                     end
+                    notify(tostring(#picked)
+                        .. _(" card(s) removed from queue"))
+                else
+                    notify_error(_(
+                        "Could not remove selected cards from the queue. Check device storage and retry."))
                 end
-                notify(tostring(removed) .. _(" card(s) removed from queue"))
             end,
             remove_from_queue_confirm = _("Remove selected cards from the pending queue? This does not change Anki."),
             after_remove_from_queue = function() refresh_book_submenu(book_title) end,
             after_delete = function() refresh_book_submenu(book_title) end,
             on_delete_all = function()
-                CardStorage.delete_where(function(card)
+                local deleted = CardStorage.delete_where(function(card)
                     local t = (card.book_title and card.book_title ~= "")
                         and card.book_title or _("Unknown book")
                     return t == book_title
                 end)
-                notify(_("All cards for this book deleted"))
+                if deleted then
+                    notify(_("All cards for this book deleted"))
+                else
+                    notify_error(_(
+                        "Could not delete all cards for this book. Check device storage and retry."))
+                end
             end,
             after_delete_all = function()
                 sync_root_book_row(book_title, nil)

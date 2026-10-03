@@ -1,14 +1,14 @@
 ================================================================================
-ANKI MEMORIZATION SETUP — copy/paste reference for AnkiKOAi
+ANKI MEMORIZATION SETUP — copy/paste reference for AnkiKoFlash
 ================================================================================
 Also saved as:  docs/desktop/memorization-anki-templates.txt  (same content)
-Formatted guide: docs/anki-memorization.md  |  Wiki Card: docs/anki-vocabulary.md
+Formatted guide: docs/anki-memorization.md  |  Vocabulary Card: docs/anki-vocabulary-card.md
 On e-reader (View README): docs/in-app/memorization.md
 
 Open this file in any text editor on your computer to copy templates into Anki.
 
 Note type name must be exactly:  Memorization
-Plugin menu label:             Memorization Card (No AI, Multi-Line)
+Plugin menu label:             Memorization Card
 
 ================================================================================
 PART 1 — CREATE NOTE TYPE
@@ -500,14 +500,14 @@ BROWSE (optional)
   Browse → search: tag:memorization::full
   Useful to preview which passages have a Full card ready.
 
-NOTE ON DECK NAMES (plugin v2)
+NOTE ON DECK NAMES
   Leaf decks are now short: Memorize::Book Title::p. 10
   (book title is not repeated in the leaf name)
 
 
 ================================================================================
 PART 9 — PLUGIN settings (Memorization)
-On device: AnkiKOAi → Settings
+On device: AnkiKoFlash → Settings
 Or edit configuration.lua on your PC.
 ================================================================================
 
@@ -516,7 +516,7 @@ CARD DEFAULTS → Memorization Card
   Parent deck .............. top-level deck (default Memorize)
   One-tap send ............. OFF = confirm before send; ON = send immediately
   Quick highlight button ... add "Memorize" on highlight menu (skips hub)
-  Skip hub submenu ......... when auto-send ON, one tap in AnkiKOAi hub
+  Skip hub submenu ......... when auto-send ON, one tap in AnkiKoFlash hub
 
 MEMORIZATION OPTIONS (behavior — split / context / batch)
   Context lines ............ prior steps shown as cue (2–20; default 3)
@@ -557,26 +557,17 @@ warns before sending again (unless Replace existing cards is ON).
 
 
 ================================================================================
-PART 10 — WIKI CARD & VOCABULARY CARD (separate decks & presets)
+PART 10 — VOCABULARY CARD (separate deck & preset)
 ================================================================================
 
 Memorization uses the Memorize deck hierarchy (Parts 1–9 above).
-Wiki Card and Vocabulary Card use a DIFFERENT deck and presets — do not reuse
-the Memorize preset for AI reading notes or dictionary drill cards.
+Vocabulary Card uses a DIFFERENT deck and preset — do not reuse the Memorize
+preset for dictionary drill cards.
 
-WIKI CARD (AI)
-  Note type:  Wiki Card
-  Fields:     Phrase, Text, Links, Source (+ optional Definition, IPA, Synonyms)
-  Deck:       Card defaults → Wiki Card → Default deck (e.g. English::Koreader)
-  Preset:     Wiki Card — new 20–40/day, reviews 200/day, steps 1m 10m 1d
-
-  Templates + CSS:  docs/desktop/wiki-card-anki-templates.txt
-  Full guide:       docs/anki-vocabulary.md
-
-VOCABULARY CARD (No AI — dictionary only)
+VOCABULARY CARD (dictionary + offline etymology)
   Note type:  Vocabulary Card
-  Fields:     Phrase, Definition, Context, Source
-  Deck:       Card defaults → Vocabulary Card → Default deck (can differ from Wiki)
+  Fields:     Phrase, Definition, Etymology, Context, Source
+  Deck:       Card defaults → Vocabulary Card → Default deck
   Preset:     Vocabulary Card — new 30–50/day, reviews 250/day, steps 1m 10m 1d
 
   Templates + CSS:  docs/desktop/vocabulary-card-anki-templates.txt
@@ -584,11 +575,7 @@ VOCABULARY CARD (No AI — dictionary only)
 
 TWO-PRESET SETUP (recommended alongside Memorize)
   Preset "Memorize"      → Memorize::* subdecks (verbatim step/full cards)
-  Preset "Wiki Card"     → your wiki default deck (AI reading notes)
   Preset "Vocabulary"    → your vocabulary default deck (dictionary-only notes)
-
-Legacy Wiki Card note types "Information card" and "Vocabulary" still work if
-fields match; new setups should add the Links field and use wiki-card-anki-templates.txt.
 
 
 ================================================================================
@@ -598,7 +585,6 @@ PART 11 — ANKICONNECT
 Anki Desktop running + AnkiConnect add-on (port 8765)
 Plugin URL: http://YOUR_PC_LAN_IP:8765   (not localhost from Kindle)
 
-Wiki deck:        Card defaults → Wiki Card (anki.wiki_deck)
 Vocabulary deck:  Card defaults → Vocabulary Card (anki.vocabulary_deck)
 Memorization:     Card defaults → Memorization Card (anki.memorize_parent_deck)
 Subdeck by book:  Card defaults → Where cards go

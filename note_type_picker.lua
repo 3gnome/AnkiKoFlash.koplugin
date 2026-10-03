@@ -10,6 +10,7 @@ local AnkiSync         = require("anki_sync")
 local CardStorage      = require("card_storage")
 local Nav              = require("nav")
 local NoteTypeProfiles = require("note_type_profiles")
+local UiBusy           = require("ui_busy")
 
 local NoteTypePicker = {}
 
@@ -17,9 +18,7 @@ local function model_allowed(name, opts)
     opts = opts or {}
     local filter = opts.profile_filter
     if not filter or filter == "" then return true end
-    if filter == "wiki" then
-        return NoteTypeProfiles.is_wiki_compatible(name)
-    elseif filter == "vocabulary" then
+    if filter == "vocabulary" then
         return NoteTypeProfiles.is_vocabulary_compatible(name)
     elseif filter == "memorization" then
         return NoteTypeProfiles.is_memorization_compatible(name)
@@ -40,9 +39,7 @@ end
 local function reject_invalid_model(model_name, opts)
     if model_allowed(model_name, opts) then return nil end
     local filter = opts and opts.profile_filter
-    if filter == "wiki" then
-        return _("That note type is not valid for Wiki Cards. Choose Wiki Card or a compatible type.")
-    elseif filter == "vocabulary" then
+    if filter == "vocabulary" then
         return _("That note type is not valid for dictionary vocabulary cards.")
     elseif filter == "memorization" then
         return _("That note type is not valid for memorization cards.")
@@ -60,6 +57,26 @@ local function sorted_unique(names)
     end
     table.sort(list)
     return list
+end
+
+-- Apply the profile filter, then fall back to the raw (unfiltered) list so
+-- the menu is never empty.
+local function filtered_names(names, opts)
+    local filtered = filter_model_names(sorted_unique(names), opts)
+    if #filtered == 0 and opts.fallback_models then
+        filtered = filter_model_names(opts.fallback_models, opts)
+    end
+    if #filtered == 0 then
+        filtered = sorted_unique(names)
+    end
+    return filtered
+end
+
+-- True when a prior fetch cached a non-empty note-type list. Lets callers open
+-- the picker instantly instead of blocking on AnkiConnect before showing a menu.
+function NoteTypePicker.has_cached_models(config)
+    local cached = config and config.cached_model_names
+    return type(cached) == "table" and #cached > 0
 end
 
 function NoteTypePicker.fetch_model_names(config, refresh)
@@ -102,7 +119,7 @@ end
 function NoteTypePicker.show(config, on_select, opts)
     opts = opts or {}
     local current = NoteTypeProfiles.normalize_model_name(
-        opts.current_model or config.wiki_note_type or config.model)
+        opts.current_model or config.vocabulary_model or config.model)
     local parent_fn = opts.parent_fn or opts.on_cancel
 
     local function open_menu(names, from_cache)
@@ -110,10 +127,10 @@ function NoteTypePicker.show(config, on_select, opts)
         local menu_instance
         local suppress_dismiss = false
         local info_subtitle = opts.info_text or _(
-            "For Wiki Cards (AI): pick an Anki note type whose fields match README. "
-            .. "Default name in Anki: Wiki Card.")
+            "Pick an Anki note type for dictionary vocabulary cards. "
+            .. "Default name in Anki: Vocabulary Card.")
         if from_cache then
-            info_subtitle = info_subtitle .. "\n" .. _("(Offline — cached note types)")
+            info_subtitle = info_subtitle .. "\n" .. _("(Offline — cached note types, may be stale)")
         end
 
         local function dismiss()
@@ -225,35 +242,40 @@ function NoteTypePicker.show(config, on_select, opts)
         Nav.show(menu_instance)
     end
 
-    local names, err_or_cached = NoteTypePicker.fetch_model_names(config, opts.refresh)
-    if names then
-        local filtered = filter_model_names(sorted_unique(names), opts)
-        if #filtered == 0 and opts.fallback_models then
-            filtered = filter_model_names(opts.fallback_models, opts)
-        end
-        if #filtered == 0 then
-            filtered = sorted_unique(names)
-        end
-        open_menu(filtered, err_or_cached == true)
+    -- Cache-first: open the menu instantly from a previous fetch instead of
+    -- blocking on AnkiConnect's modelNames round-trip (which could take seconds
+    -- on a slow or unreachable Anki, making the menu feel frozen).
+    if not opts.refresh and NoteTypePicker.has_cached_models(config) then
+        open_menu(filtered_names(config.cached_model_names, opts), true)
         return
     end
-    UIManager:show(Notification:new {
-        text = (err_or_cached or _("Could not load note types"))
-               .. " — " .. _("using built-in list"),
-        timeout = 4,
-    })
-    local fallbacks = filter_model_names(opts.fallback_models or {
-        NoteTypeProfiles.DEFAULT_MODEL,
-        NoteTypeProfiles.VOCABULARY_CARD_MODEL,
-        "Basic",
-    }, opts)
-    if #fallbacks == 0 then
-        fallbacks = opts.fallback_models or {
+
+    -- No cache yet (or an explicit refresh): fetch with a progress indicator
+    -- (Trapper coroutine) so the reader stays responsive instead of freezing.
+    UiBusy.run(_("Loading note types…"), function()
+        local names, err_or_cached = NoteTypePicker.fetch_model_names(config, opts.refresh)
+        if names then
+            open_menu(filtered_names(names, opts), err_or_cached == true)
+            return
+        end
+        UIManager:show(Notification:new {
+            text = (err_or_cached or _("Could not load note types"))
+                   .. " — " .. _("using built-in list"),
+            timeout = 4,
+        })
+        local fallbacks = filter_model_names(opts.fallback_models or {
             NoteTypeProfiles.DEFAULT_MODEL,
+            NoteTypeProfiles.VOCABULARY_CARD_MODEL,
             "Basic",
-        }
-    end
-    open_menu(fallbacks, true)
+        }, opts)
+        if #fallbacks == 0 then
+            fallbacks = opts.fallback_models or {
+                NoteTypeProfiles.DEFAULT_MODEL,
+                "Basic",
+            }
+        end
+        open_menu(fallbacks, true)
+    end)
 end
 
 return NoteTypePicker

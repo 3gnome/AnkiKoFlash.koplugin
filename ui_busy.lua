@@ -1,4 +1,4 @@
--- Keep KOReader responsive during long network + AI work (Trapper coroutine).
+-- Keep KOReader responsive during long network and dictionary work (Trapper coroutine).
 
 local InfoMessage = require("ui/widget/infomessage")
 local Trapper     = require("ui/trapper")

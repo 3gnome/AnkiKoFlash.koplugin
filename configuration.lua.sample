@@ -1,49 +1,23 @@
 local CONFIGURATION = {
-    -- DashScope (Qwen) — default AI provider.
-    -- Get your key at: https://dashscope-intl.console.aliyun.com/
-    dashscope_api_key = "YOUR_DASHSCOPE_API_KEY",
-    provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-    model             = "qwen-plus",
-
-    -- ── Gemini (Google) ───────────────────────────────────────────────────
-    -- Get your key at: https://aistudio.google.com/apikey
-    gemini_api_key = "YOUR_GEMINI_API_KEY",
-
-    -- ── OpenAI ─────────────────────────────────────────────────────────────
-    -- Get your key at: https://platform.openai.com/api-keys
-    openai_api_key = "YOUR_OPENAI_API_KEY",
-
-    -- ── OpenRouter — access to hundreds of models via one API key ─────────
-    -- Get your key at: https://openrouter.ai/keys
-    openrouter_api_key = "YOUR_OPENROUTER_API_KEY",
-    openrouter_model   = "anthropic/claude-3-haiku",
-
-    -- ── Target language ────────────────────────────────────────────────────
-    target_language = "English",
-
-    -- ── AI provider ───────────────────────────────────────────────────────
-    -- Options: "dashscope", "gemini", "openai", "openrouter"
-    text_provider = "dashscope",
-
     -- ── Anki integration ────────────────────────────────────────────────────
     -- AnkiConnect on the same Wi‑Fi as your e-reader. Use your PC's LAN IP, not localhost.
     anki = {
-        url   = "http://192.168.1.100:8765",
-        deck  = "English::Koreader",  -- legacy fallback; prefer wiki_deck / vocabulary_deck
-        wiki_deck = "English::Koreader",
+        -- Leave blank until you configure AnkiConnect; the plugin will prompt
+        -- for setup. Use your PC's LAN IP (not localhost), e.g. "http://192.168.1.50:8765".
+        url   = "",
+        deck  = "English::Koreader",  -- legacy fallback; prefer vocabulary_deck
         vocabulary_deck = "English::Koreader",
-        wiki_note_type = "Wiki Card",
-        model = "Wiki Card",
         vocabulary_model = "Vocabulary Card",
         memorize_parent_deck = "Memorize",
+        max_memorization_steps = 80,
         tags  = { "KOReader" },
         sync_after_send = true,
         -- Card defaults (Settings → Card defaults…):
-        -- auto_send_wiki = false,
         -- auto_send_vocabulary = false,
         -- auto_send_memorization = false,
         -- auto_send_skip_hub_submenu = false,
-        -- vocabulary_preferred_dictionary = "My StarDict",
+        -- vocabulary_preferred_dictionary = "reader.dict EN",
+        -- etymology_preferred_dictionary = "Etymology (Wiktionary)",
     },
 
     -- Memorization behavior (LPCG-style step cards + full recitation).

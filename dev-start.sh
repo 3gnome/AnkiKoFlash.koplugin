@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sync AnkiKOAi + TagBankHighlightSync into the dev emulator, then launch KOReader once.
+# Sync AnkiKoFlash + TagBankHighlightSync into the dev emulator, then launch KOReader once.
 #
 # Usage:
 #   bash dev-start.sh --emulator alice.epub
@@ -7,7 +7,7 @@
 #   bash dev-start.sh --appimage alice.epub
 #   bash dev-start.sh -h | --help
 #
-# Environment: ANKIKOOAI_SRC, TAGBANKHIGHLIGHTSYNC_SRC, KOREADER_DIR, KOREADER_MODE, KOREADER_APPIMAGE
+# Environment: ANKIKOFLASH_SRC, TAGBANKHIGHLIGHTSYNC_SRC, KOREADER_DIR, KOREADER_MODE, KOREADER_APPIMAGE
 
 set -euo pipefail
 
@@ -17,7 +17,7 @@ source "$SCRIPT_DIR/dev-lib.sh"
 
 print_help() {
     cat <<'EOF'
-dev-start.sh - Sync AnkiKOAi + TagBankHighlightSync, launch KOReader once
+dev-start.sh - Sync AnkiKoFlash + TagBankHighlightSync, launch KOReader once
 
 Avoid two full emulator launches in one WSL session — a second launch often
 triggers WSLg [WARN: COPY MODE] in the taskbar (not shown in terminal logs).
@@ -35,10 +35,10 @@ OPTIONS
   --setup-cloud     Run setup-emulator-cloud.sh, then sync and continue
   --emulator        Force emulator mode
   --appimage        Force AppImage mode
-  book              Relative paths resolve against AnkiKOAi repo
+  book              Relative paths resolve against AnkiKoFlash repo
 
 ENVIRONMENT
-  ANKIKOOAI_SRC                 AnkiKOAi plugin source (default: this repo)
+  ANKIKOFLASH_SRC                 AnkiKoFlash plugin source (default: this repo)
   TAGBANKHIGHLIGHTSYNC_SRC      TagBankHighlightSync plugin source
   KOREADER_DIR                  Emulator root (default: ~/koreader-dev/emulator/usr/lib/koreader)
   KOREADER_MODE                 appimage | emulator

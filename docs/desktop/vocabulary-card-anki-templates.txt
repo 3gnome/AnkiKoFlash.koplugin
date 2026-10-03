@@ -1,8 +1,8 @@
 ================================================================================
-VOCABULARY CARD — Anki copy/paste templates for AnkiKOAi
+VOCABULARY CARD — Anki copy/paste templates for AnkiKoFlash
 ================================================================================
 Anki note type name:  Vocabulary Card
-Plugin menu label:    Vocabulary Card (No AI)
+Plugin menu label:    Vocabulary Card
 
 Open this file in any text editor on your computer (Notepad, VS Code, etc.).
 Copy each block below into Anki → Tools → Manage Note Types → Vocabulary Card → Cards.
@@ -15,6 +15,7 @@ PART 1 — FIELDS (in this order)
 ================================================================================
   Phrase
   Definition
+  Etymology
   Context
   Source
 
@@ -45,9 +46,16 @@ PART 3 — BACK TEMPLATE
   {{#Definition}}
   <div class="section">
     <div class="section-label">Definition</div>
-    <div class="section-body" id="akoai-def">{{Definition}}</div>
+    <div class="section-body" id="ankikoflash-def">{{Definition}}</div>
   </div>
   {{/Definition}}
+
+  {{#Etymology}}
+  <div class="section">
+    <div class="section-label">Etymology</div>
+    <div class="section-body etymology">{{Etymology}}</div>
+  </div>
+  {{/Etymology}}
 
   {{#Context}}
   <div class="section">
@@ -64,7 +72,7 @@ PART 3 — BACK TEMPLATE
    dictionaries embed as plain text in the definition. Anki re-renders each
    card with a fresh DOM, so this runs cleanly every time. */
 (function () {
-  var el = document.getElementById("akoai-def");
+  var el = document.getElementById("ankikoflash-def");
   if (!el) return;
   var POS = ["Proper noun", "Noun", "Verb", "Adjective", "Adverb", "Pronoun",
              "Preposition", "Conjunction", "Interjection", "Determiner",
@@ -167,6 +175,10 @@ PART 4 — STYLING
   text-align: left;
 }
 
+.etymology {
+  font-size: 0.95em;
+}
+
 .context {
   font-size: 0.96em;
   font-style: italic;
@@ -211,7 +223,7 @@ Plugin settings (on device):
   Settings → Card defaults → Vocabulary Card → Note type: Vocabulary Card
   Optional: Preferred dictionary, One-tap send (Vocabulary)
 
-Suggested deck-options preset:  Vocabulary Card (or reuse Wiki Card preset)
+Suggested deck-options preset:  Vocabulary Card
 
   New cards/day:              30–50
   Maximum reviews/day:        250
@@ -221,8 +233,8 @@ Suggested deck-options preset:  Vocabulary Card (or reuse Wiki Card preset)
   Starting ease:              250%
   Bury related new/siblings:  OFF
 
-Dictionary definitions are shorter than AI Wiki Cards — slightly higher daily
-caps are often comfortable.
+Dictionary definitions are compact — slightly higher daily caps are often
+comfortable.
 
 Full setup guide (fields, plugin settings, dictionary install):
   docs/anki-vocabulary-card.md

@@ -1,13 +1,13 @@
 # Tag Bank companion (optional)
 
-[Tag Bank Highlight Sync](https://github.com/3gnome/tagbankhighlightsync.koplugin) tags highlights, merges `*.sdr.json` across devices via cloud storage, and exports a Markdown quote library for Obsidian. **AnkiKOAi** handles Anki flashcards — either plugin works alone.
+[Tag Bank Highlight Sync](https://github.com/3gnome/tagbankhighlightsync.koplugin) tags highlights, merges `*.sdr.json` across devices via cloud storage, and exports a Markdown quote library for Obsidian. **AnkiKoFlash** handles Anki flashcards — either plugin works alone.
 
 ## Division of labor
 
 | Task | Plugin |
 |------|--------|
-| Wiki / Vocab / Memorization cards → Anki | **AnkiKOAi** |
-| View / delete / batch-send highlights as cards | **AnkiKOAi** |
+| Vocab / Memorization cards → Anki | **AnkiKoFlash** |
+| View / delete / batch-send highlights as cards | **AnkiKoFlash** |
 | Tag highlights, folder hierarchy | **Tag Bank** |
 | JSON device sync + Obsidian `library/` export | **Tag Bank** |
 
@@ -26,6 +26,6 @@ When both are installed:
 
 ## Typical workflow
 
-Read → tag (Tag Bank) → send cards (AnkiKOAi) → **Sync now** (Tag Bank) → browse `library/` in Obsidian.
+Read → tag (Tag Bank) → send cards (AnkiKoFlash) → **Sync now** (Tag Bank) → browse `library/` in Obsidian.
 
-See also [Tag Bank — AnkiKOAi companion](https://github.com/3gnome/tagbankhighlightsync.koplugin/blob/main/docs/companion-ankikooai.md).
+See also [Tag Bank — AnkiKoFlash companion](https://github.com/3gnome/tagbankhighlightsync.koplugin/blob/main/docs/companion-ankikoflash.md).

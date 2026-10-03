@@ -23,14 +23,6 @@ local Nav = require("nav")
 local ReadmeViewer = {}
 
 ReadmeViewer.DOCS = {
-    wiki = {
-        title = _("Wiki Card — Anki setup"),
-        files = { "docs/in-app/wiki-card.md", "docs/anki-vocabulary.md" },
-        desktop = {
-            file  = "docs/desktop/wiki-card-anki-templates.txt",
-            guide = "docs/anki-vocabulary.md",
-        },
-    },
     vocabulary = {
         title = _("Vocabulary Card — Anki setup"),
         files = { "docs/in-app/vocabulary-card.md", "docs/anki-vocabulary-card.md" },
@@ -61,13 +53,6 @@ ReadmeViewer.DOCS = {
             guide = "docs/plugin-configuration.md",
         },
     },
-    prompts = {
-        title = _("Prompts & suffix"),
-        files = { "docs/in-app/prompts-and-suffix.md", "docs/prompts-and-suffix.md" },
-        desktop = {
-            guide = "docs/prompts-and-suffix.md",
-        },
-    },
     settings = {
         title = _("Settings — help"),
         files = { "docs/in-app/settings-ui.md" },
@@ -78,36 +63,23 @@ ReadmeViewer.DOCS = {
 }
 
 ReadmeViewer.MODE_IDS = {
-    wiki         = "wiki",
     vocabulary   = "vocabulary",
     memorization = "memorization",
 }
 
 local FALLBACK = {
-    wiki = _([[
-Wiki Card (AI)
-
-Anki note type: Wiki Card
-Front: highlighted term. Back: Wikipedia-style article + explore links.
-
-Fields: Phrase, Text, Links, Source (+ optional Definition, IPA)
-
-On your computer, open docs/desktop/wiki-card-anki-templates.txt in a text editor to copy front/back templates and CSS into Anki.
-
-Full guide: docs/anki-vocabulary.md]]),
-
     vocabulary = _([[
-Vocabulary Card (No AI)
+Vocabulary Card
 
 Anki note type: Vocabulary Card
-Fields: Phrase, Definition, Context, Source
+Fields: Phrase, Definition, Etymology, Context, Source
 
 On your computer, open docs/desktop/vocabulary-card-anki-templates.txt in a text editor to copy templates and CSS into Anki.
 
 Full guide: docs/anki-vocabulary-card.md]]),
 
     memorization = _([[
-Memorization Card (No AI, Multi-Line)
+Memorization Card
 
 Anki note type: Memorization
 
@@ -116,12 +88,12 @@ On your computer, open docs/desktop/memorization-anki-templates.txt in a text ed
 Full guide: docs/anki-memorization.md]]),
 
     getting_started = _([[
-Getting started with AnkiKOAi
+Getting started with AnkiKoFlash
 
 1. Install this plugin (.koplugin folder)
 2. Set up AnkiConnect on your PC
-3. Create matching Anki note types (Wiki Card, Vocabulary Card, or Memorization)
-4. Configure API keys and decks in AnkiKOAi → Settings
+3. Create matching Anki note types (Vocabulary Card or Memorization)
+4. Configure decks in AnkiKoFlash → Settings
 5. View all highlights: highlight menu → View All Highlights
 
 See docs/getting-started.md on your PC for the full guide.]]),
@@ -131,18 +103,9 @@ Plugin configuration
 
 Settings live in configuration.lua (PC) and on-device JSON after you save once.
 
-Configure AnkiConnect URL, default decks, AI provider keys, and per-book deck maps in AnkiKOAi → Settings.
+Configure AnkiConnect URL, default decks, and per-book deck maps in AnkiKoFlash → Settings.
 
 See docs/plugin-configuration.md on your PC for details.]]),
-
-    prompts = _([[
-Prompts & suffix
-
-Customize AI prompts for Wiki Card generation: suffix, per–note-type generate/regen templates, previews.
-
-Open Settings → AI Settings → Prompts & suffix. Use Preview before Save.
-
-See docs/prompts-and-suffix.md on your PC for placeholders and storage keys.]]),
 }
 
 local PLUGIN_DIR = (function()
@@ -267,7 +230,7 @@ end
 function ReadmeViewer.load(readme_id)
     local spec = ReadmeViewer.DOCS[readme_id]
     if not spec then
-        return _("README"), FALLBACK.wiki or _("No README available.")
+        return _("README"), FALLBACK.vocabulary or _("No README available.")
     end
 
     local raw = read_first_doc(spec)
@@ -291,7 +254,7 @@ function ReadmeViewer.show_or_notify(readme_id, opts)
 end
 
 local ReadmeDialog = InputContainer:extend {
-    name  = "ankikooai_readme_viewer",
+    name  = "ankikoflash_readme_viewer",
     modal = true,
 }
 

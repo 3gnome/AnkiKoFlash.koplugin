@@ -59,7 +59,7 @@ else
     echo "  AnkiConnect not reachable at $ANKI_URL — skip Anki delete (purge local cards anyway)"
 fi
 
-echo "=== 2. Purge Alice from ankikooai_cards.json ==="
+echo "=== 2. Purge Alice from ankikoflash_cards.json ==="
 filter_cards() {
     local path="$1"
     [ -f "$path" ] || return 0
@@ -78,17 +78,17 @@ with open(path, "w", encoding="utf-8") as f:
 print(f"  {path}: removed {removed}, kept {len(kept)}")
 PY
 }
-filter_cards "$DESKTOP_KO/ankikooai_cards.json"
-filter_cards "$EMULATOR_KO/ankikooai_cards.json"
-for f in "$DESKTOP_KO/ankikooai_recent_sent.json" "$EMULATOR_KO/ankikooai_recent_sent.json"; do
+filter_cards "$DESKTOP_KO/ankikoflash_cards.json"
+filter_cards "$EMULATOR_KO/ankikoflash_cards.json"
+for f in "$DESKTOP_KO/ankikoflash_recent_sent.json" "$EMULATOR_KO/ankikoflash_recent_sent.json"; do
     filter_cards "$f" 2>/dev/null || true
 done
 
 echo "=== 3. Delete alice.epub + sidecars ==="
 rm -f "$ANKI_REPO/alice.epub"
 rm -rf "$ANKI_REPO/alice.sdr"
-rm -f "$DESKTOP_KO/plugins/AnkiKOAi.koplugin/alice.epub"
-rm -rf "$DESKTOP_KO/plugins/AnkiKOAi.koplugin/alice.sdr"
+rm -f "$DESKTOP_KO/plugins/AnkiKoFlash.koplugin/alice.epub"
+rm -rf "$DESKTOP_KO/plugins/AnkiKoFlash.koplugin/alice.sdr"
 rm -f "$EMULATOR_KO/cache/cr3cache/alice.epub."*.cr3 2>/dev/null || true
 
 echo "=== 4. Delete WebDAV alice.sdr.json ==="

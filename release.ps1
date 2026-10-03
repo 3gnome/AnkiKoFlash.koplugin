@@ -1,4 +1,4 @@
-# Create a GitHub release zip for AnkiKOAi and publish with gh.
+# Create a GitHub release zip for AnkiKoFlash and publish with gh.
 #
 # First-time setup (once per machine):
 #   gh auth login
@@ -23,7 +23,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $MetaFile = Join-Path $RepoRoot "_meta.lua"
-$PluginFolder = "AnkiKOAi.koplugin"
+$PluginFolder = "AnkiKoFlash.koplugin"
 $ZipDir = Split-Path -Parent $RepoRoot
 
 # Refresh PATH so gh is found in terminals opened before winget install.
@@ -85,9 +85,9 @@ function Ensure-Gh {
 function Get-DefaultNotes([string]$Ver) {
     @"
 ## Install
-Download ``AnkiKOAi-v$Ver.zip``, unzip, and copy the ``AnkiKOAi.koplugin`` folder into your KOReader ``plugins/`` directory.
+Download ``AnkiKoFlash-v$Ver.zip``, unzip, and copy the ``AnkiKoFlash.koplugin`` folder into your KOReader ``plugins/`` directory.
 
-See [Getting started](https://github.com/3gnome/AnkiKOAi.koplugin/blob/main/docs/getting-started.md) for setup.
+See [Getting started](https://github.com/3gnome/AnkiKoFlash.koplugin/blob/main/docs/getting-started.md) for setup.
 "@
 }
 
@@ -118,7 +118,7 @@ try {
     }
 
     $tag = "v$Version"
-    $zipName = "AnkiKOAi-v$Version.zip"
+    $zipName = "AnkiKoFlash-v$Version.zip"
     $zipPath = Join-Path $ZipDir $zipName
 
     Write-Step "Building $zipName"
@@ -187,7 +187,7 @@ try {
             --notes $notes
     }
 
-    Write-Step "Done: https://github.com/3gnome/AnkiKOAi.koplugin/releases/tag/$tag"
+    Write-Step "Done: https://github.com/3gnome/AnkiKoFlash.koplugin/releases/tag/$tag"
     Write-Host "Zip: $zipPath"
 }
 finally {

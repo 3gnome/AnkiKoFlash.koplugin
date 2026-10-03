@@ -15,8 +15,8 @@
 
 ## Install
 
-Download `AnkiKOAi-v1.1.1.zip`, unzip, and copy the `AnkiKOAi.koplugin` folder into your KOReader `plugins/` directory.
+Download `AnkiKoFlash-v1.1.1.zip`, unzip, and copy the `AnkiKoFlash.koplugin` folder into your KOReader `plugins/` directory.
 
-See [Getting started](https://github.com/3gnome/AnkiKOAi.koplugin/blob/main/docs/getting-started.md) for setup.
+See [Getting started](https://github.com/3gnome/AnkiKoFlash.koplugin/blob/main/docs/getting-started.md) for setup.
 
 **Optional companion:** [Tag Bank Highlight Sync](https://github.com/3gnome/tagbankhighlightsync.koplugin) for tags, JSON sync, and Obsidian quote library.

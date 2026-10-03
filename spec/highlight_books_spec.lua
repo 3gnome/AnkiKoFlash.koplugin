@@ -1,28 +1,7 @@
 #!/usr/bin/env luajit
 -- Run: luajit spec/highlight_books_spec.lua (from plugin root)
 
-local root = arg[0]:match("(.*)[/\\]") or "."
-package.path = package.path .. ";" .. root .. "/?.lua;" .. root .. "/spec/?.lua"
-
-local passed, failed = 0, 0
-
-local function assert_true(c, msg)
-    if not c then
-        failed = failed + 1
-        print("FAIL:", msg)
-        return
-    end
-    passed = passed + 1
-end
-
-local function assert_eq(a, e, msg)
-    if a ~= e then
-        failed = failed + 1
-        print("FAIL:", msg, "expected", e, "got", a)
-        return
-    end
-    passed = passed + 1
-end
+local function run_tests(assert_eq, assert_true)
 
 package.loaded["readhistory"] = {
     hist = {
@@ -121,5 +100,23 @@ local meta = HighlightBooks.read_book_metadata("/books/alice.epub")
 assert_eq(meta.title, "Alice", "metadata title")
 assert_eq(meta.author, "Carroll", "metadata author")
 
-print(string.format("Results: %d passed, %d failed", passed, failed))
-if failed > 0 then os.exit(1) end
+end
+
+if arg and arg[0] and arg[0]:match("highlight_books_spec%.lua$") then
+    local root = arg[0]:match("(.*)[/\\]") or "."
+    package.path = package.path .. ";" .. root .. "/?.lua;" .. root .. "/../?.lua"
+    local passed, failed = 0, 0
+    local function assert_true(c, msg)
+        if not c then failed = failed + 1; print("FAIL:", msg); return end
+        passed = passed + 1
+    end
+    local function assert_eq(a, e, msg)
+        if a ~= e then failed = failed + 1; print("FAIL:", msg, "expected", e, "got", a); return end
+        passed = passed + 1
+    end
+    run_tests(assert_eq, assert_true)
+    print(string.format("Results: %d passed, %d failed", passed, failed))
+    os.exit(failed > 0 and 1 or 0)
+end
+
+return run_tests

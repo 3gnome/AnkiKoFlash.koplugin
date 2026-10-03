@@ -1,10 +1,10 @@
-# AnkiKOAi
+# AnkiKoFlash
 
-KOReader plugin: long-press a word or highlight a passage while reading → AI vocabulary cards or LPCG-style memorization decks → sync to Anki via [AnkiConnect](https://foosoft.net/projects/anki-connect/).
+KOReader plugin: long-press a word or highlight a passage while reading → dictionary flashcards (with offline etymology) or LPCG-style memorization decks → sync to Anki via [AnkiConnect](https://foosoft.net/projects/anki-connect/).
 
 Works on Kobo, Kindle (with KOReader), and the KOReader desktop emulator.
 
-Unlike manually exporting highlights, AnkiKOAi builds finished, formatted cards (AI articles, dictionary definitions, or memorization steps) and sends them straight to Anki over your Wi‑Fi — no cables, no copy‑paste.
+Unlike manually exporting highlights, AnkiKoFlash builds finished, formatted cards — a dictionary definition plus its etymology, or a set of memorization steps — and sends them straight to Anki over your Wi‑Fi. No cables, no copy‑paste, no API keys, no cloud accounts.
 
 ## Demo
 
@@ -12,49 +12,41 @@ From a highlight to a finished Anki card, without leaving your book:
 
 | 1. Long-press / highlight | 2. Review the card | 3. Pick an Anki deck |
 |---|---|---|
-| ![Highlight menu with the AnkiKOAi entry](docs/images/highlight-menu.png) | ![Generated card preview on the device](docs/images/card-preview.png) | ![Choosing the target Anki deck](docs/images/deck-picker.png) |
+| ![Highlight menu with the AnkiKoFlash entry](docs/images/highlight-menu.png) | ![Vocabulary card preview on the device](docs/images/card-preview.png) | ![Choosing the target Anki deck](docs/images/deck-picker.png) |
 
 The card lands in desktop Anki, ready to study:
 
 ![The finished card in desktop Anki](docs/images/anki-card.png)
 
-### Wiki Card (AI)
-
-The AI **Wiki Card** turns a highlight into a reading note: a written-up article plus "Explore further" Wikipedia links, with the source citation. On the device, then synced to Anki:
-
-| On the device | In Anki |
-|---|---|
-| ![AI Wiki Card preview on the device](docs/images/wiki-card-preview.png) | ![AI Wiki Card with article and explore links in Anki](docs/images/wiki-card-anki.png) |
-
 ### Memorization (poetry & prose)
 
-Highlight a poem or passage and AnkiKOAi builds LPCG-style overlapping step cards plus a full-recitation card:
+Highlight a poem or passage and AnkiKoFlash builds LPCG-style overlapping step cards plus a full-recitation card:
 
 | 1. Create Memorization Card | 2. Confirm the deck | 3. Step card in Anki |
 |---|---|---|
-| ![Memorization entry in the AnkiKOAi menu](docs/images/memorization-menu.png) | ![Confirmation showing step + recitation cards](docs/images/memorization-confirm.png) | ![A memorization step card in Anki](docs/images/memorization-anki.png) |
+| ![Memorization entry in the AnkiKoFlash menu](docs/images/memorization-menu.png) | ![Confirmation showing step + recitation cards](docs/images/memorization-confirm.png) | ![A memorization step card in Anki](docs/images/memorization-anki.png) |
 
 <!-- Optional: add a short screen recording as docs/images/demo.gif and embed it above for social posts. -->
 
-
 ## Features
 
-- **Wiki Card (AI)** — Wikipedia/Wiktionary + AI turn a highlight into a reading note (term on front, article + Wikipedia links on back)
-- **Vocabulary Card (No AI)** — KOReader dictionary lookup only — definition + passage, no AI
-- **Memorization Card (No AI, Multi-Line)** — overlapping step cards + full-recitation card for poetry and prose ([AnkiLPCG](https://ankilpcg.readthedocs.io/)-style)
+- **Vocabulary Card** — KOReader dictionary lookup plus an **Etymology** section from a bundled offline etymology dictionary (definition + etymology + passage + source, no network required)
+- **Memorization Card** — overlapping step cards + full-recitation card for poetry and prose ([AnkiLPCG](https://ankilpcg.readthedocs.io/)-style)
 - **AnkiConnect** — send to desktop Anki; optional auto-sync to AnkiWeb after send
 - **My Cards** — pending outbox only; **Recently sent** log for confirmed sends; manual batch send shows **Sending… N/M** progress; batch send reconciles duplicates/timeouts and removes cards from the queue
-- **View All Highlights** — checklist of highlights from the current book (or **Switch book…** for any book in history): multi-select, **Delete Selected Highlights** (open book only), batch send as Wiki/Vocab/Memorization; **Sync All Highlights** when [Tag Bank](https://github.com/3gnome/tagbankhighlightsync.koplugin) is installed
-- **Settings UI** — Card defaults (note types, decks, one-tap send), AI providers, memorization behavior, sync; gray rows = tap for help (no file editing on device)
+- **View All Highlights** — checklist of highlights from the current book (or **Switch book…** for any book in history): multi-select, **Delete Selected Highlights** (open book only), batch send as Vocabulary/Memorization; **Sync All Highlights** when [Tag Bank](https://github.com/3gnome/tagbankhighlightsync.koplugin) is installed
+- **Settings UI** — card defaults (note types, decks, one-tap send), memorization behavior, sync; gray rows = tap for help (no file editing on device)
 - **One-tap send** — per card type: skip note-type/deck prompts and send straight to your default deck
-- **Multiple AI providers** — DashScope, Gemini, OpenAI, OpenRouter
+- **Save only** — hub-menu toggle: skip prompts and save vocabulary cards locally with no network attempt (great when you're away from your Anki PC)
+- **Loss-resistant queue** — atomic local/cloud writes, safe startup recovery, and non-destructive cloud merging
+- **Long-workflow safeguards** — cancellable inbox batches, bounded memorization confirmation, and partial-send recovery
 
 ## Quick start
 
-1. Install the plugin into `koreader/plugins/AnkiKOAi.koplugin/`
-2. Set up three Anki note types: **Wiki Card**, **Vocabulary Card**, and **Memorization**
+1. Install the plugin into `koreader/plugins/AnkiKoFlash.koplugin/`
+2. Set up two Anki note types: **Vocabulary Card** and **Memorization**
 3. Configure AnkiConnect on your PC and enter your LAN URL in plugin Settings
-4. Long-press a word or highlight text → **View All Highlights**, **AnkiKOAi**, or **Memorize** (scroll the highlight menu). **AnkiKOAi** opens the hub for card types, **My Cards**, and settings. Or long-press → **Dictionary** → **AnkiKOAi** or **Create Vocab Card**.
+4. Long-press a word or highlight text → **View All Highlights**, **AnkiKoFlash**, or **Memorize** (scroll the highlight menu). **AnkiKoFlash** opens the hub for card types, **My Cards**, and settings. Or long-press → **Dictionary** → **AnkiKoFlash** or **Create Vocab Card**.
 
 **Full walkthrough:** [docs/getting-started.md](docs/getting-started.md)
 
@@ -67,11 +59,10 @@ Highlight a poem or passage and AnkiKOAi builds LPCG-style overlapping step card
 | [Tag Bank companion](docs/tag-bank-companion.md) | Optional tags, JSON sync, Obsidian quote library |
 | [WebDAV setup (Windows)](docs/webdav-setup-windows.md) | Local WebDAV for Tag Bank on home Wi‑Fi |
 | [Plugin & recent work summary](docs/plugin-and-recent-work-summary.md) | Architecture, TagBank companion, dev session notes |
-| [Plugin configuration](docs/plugin-configuration.md) | API keys, settings UI, `configuration.lua` |
-| [Anki: Wiki Card setup](docs/anki-vocabulary.md) | AI + wiki note type, templates, CSS, deck options |
-| [Anki: Vocabulary Card setup](docs/anki-vocabulary-card.md) | Dictionary-only note type (no AI) |
+| [Plugin configuration](docs/plugin-configuration.md) | Settings UI, `configuration.lua` |
+| [Anki: Vocabulary Card setup](docs/anki-vocabulary-card.md) | Dictionary-only note type (with etymology) |
 | [Anki: Memorization deck](docs/anki-memorization.md) | Step/full cards, deck hierarchy, weekly routine |
-| [Desktop copy-paste templates](docs/desktop/) | Front/back HTML + CSS for all three note types |
+| [Desktop copy-paste templates](docs/desktop/) | Front/back HTML + CSS for both note types |
 | [anki-memorization-setup.txt](anki-memorization-setup.txt) | Memorization templates (same as `docs/desktop/memorization-anki-templates.txt`) |
 | [Publishing & discoverability](docs/publishing.md) | GitHub, releases, KOReader AppStore, SEO |
 | [Announcement posts](docs/announcements.md) | Ready-to-paste posts for MobileRead, Reddit, Anki forums |
@@ -84,57 +75,58 @@ On your e-reader, tap **View README** in each card submenu for what that card ty
 |-----------|---------|
 | [KOReader](https://koreader.rocks/) | E-reader app |
 | [Anki](https://apps.ankiweb.net/) + [AnkiConnect](https://foosoft.net/projects/anki-connect/) | Desktop on same Wi‑Fi as your device |
-| AI API key | For **Wiki Card (AI)** only — DashScope, Gemini, OpenAI, or OpenRouter |
-| StarDict dictionaries | For **Vocabulary Card (No AI)** — install in KOReader |
-| Anki note types | **Wiki Card**, **Vocabulary Card**, and **Memorization** — see docs above |
+| StarDict dictionaries | For **Vocabulary Card** lookups — install in KOReader |
+| Etymology dictionary (StarDict) | Optional but recommended — fills the **Etymology** field offline |
+| Anki note types | **Vocabulary Card** and **Memorization** — see docs above |
 
-## Wiki Card (AI)
+## Vocabulary Card
 
-A **Wiki Card** is not a traditional question→answer flashcard. Highlight a word or phrase while reading and AnkiKOAi will:
+A **Vocabulary Card** is a dictionary drill card built entirely from KOReader's installed dictionaries — no network, no accounts. Highlight a word while reading and AnkiKoFlash will:
 
-1. Pull excerpts from **Wikipedia / Wiktionary** (when enabled and online)
-2. Add the **surrounding passage** from your book
-3. Use **AI** to write a Wikipedia-style **article** for the back of the card
-4. Add **real Wikipedia links** you can tap to explore further in Anki
+1. Look up the word in your KOReader StarDict dictionary
+2. Look up its **etymology** in the offline etymology dictionary (when installed)
+3. Add the **surrounding passage** from your book
+4. Send `Phrase`, `Definition`, `Etymology`, `Context`, and `Source` to Anki
 
-You review the note in KOReader, then send it to Anki. On study, the **term** is on the front; the **article and explore links** are on the back.
+On study, the **term** is on the front; the **definition, etymology, and passage** are on the back.
+
+### Etymology dictionary
+
+AnkiKoFlash ships with a build script (`scripts/build_etymology_dict.py`) that produces a compact, offline StarDict dictionary from the Wiktionary English snapshot. Install the resulting `etymology.ifo/.idx/.dict` into KOReader's `data/dict/` folder (same place as your other dictionaries), then set **Settings → Card defaults → Vocabulary Card → Etymology dictionary** to its name (e.g. `Etymology (Wiktionary)`).
+
+- The dictionary is **offline** — etymology is looked up on-device, never over the network.
+- If the etymology dictionary is missing, the card is still built from the definition and passage alone; the `Etymology` field is simply left empty.
 
 ### Set up Anki first (required)
 
-Create an Anki note type named **Wiki Card** with these **exact field names** (order matters for templates):
+Create an Anki note type named **Vocabulary Card** with these **exact field names** (order matters for templates):
 
 | Field | Purpose |
 |-------|---------|
 | Phrase | Highlighted term (front) |
-| Text | Wikipedia-style article (back) |
-| Links | Real Wikipedia URLs (filled by plugin) |
+| Definition | Dictionary definition (back) |
+| Etymology | Word origin, from the offline etymology dictionary (back) |
+| Context | Surrounding passage from your book |
 | Source | Book title, author, page (filled by plugin) |
-| Definition | Optional short lede |
-| IPA | Optional pronunciation hint |
-| Synonyms | Legacy; usually empty |
 
 Copy-paste **front/back templates, CSS, and deck study settings**:
 
-→ **[docs/anki-vocabulary.md](docs/anki-vocabulary.md)** (Wiki Card setup guide)
+→ **[docs/anki-vocabulary-card.md](docs/anki-vocabulary-card.md)** (Vocabulary Card setup guide)
 
-Default deck: `English::Koreader`. Configure note type and **One-tap send (Wiki)** under **Settings → Card defaults → Wiki Card**.
+Default deck: `English::Koreader`. Configure note type and **One-tap send (Vocabulary)** under **Settings → Card defaults → Vocabulary Card**.
 
-## Vocabulary Card (No AI)
+## Memorization Card
 
-For a simpler card from your **in-app dictionary** only — no AI, no wiki:
+For poetry and prose memorization, highlight a passage and AnkiKoFlash builds overlapping step cards plus an optional full-recitation card:
 
-1. Install StarDict dictionaries in KOReader
-2. Create Anki note type **Vocabulary Card** with fields `Phrase`, `Definition`, `Context`, `Source`
-3. **Long-press** a word → **Create Vocab Card**, or highlight → **AnkiKOAi → Vocabulary Card (No AI)**
-
-→ **[docs/anki-vocabulary-card.md](docs/anki-vocabulary-card.md)** (full setup guide)
+→ **[docs/anki-memorization.md](docs/anki-memorization.md)** (full setup guide)
 
 ## Installation
 
 1. Copy this folder to your device:
 
    ```
-   koreader/plugins/AnkiKOAi.koplugin/
+   koreader/plugins/AnkiKoFlash.koplugin/
    ```
 
    (Folder name must end in `.koplugin`.)
@@ -145,11 +137,11 @@ For a simpler card from your **in-app dictionary** only — no AI, no wiki:
    cp configuration.lua.sample configuration.lua
    ```
 
-   Edit `configuration.lua` with your API key and AnkiConnect URL, **or** enter them in **AnkiKOAi → Settings** on the device (recommended on Kobo).
+   Edit `configuration.lua` with your AnkiConnect URL, **or** enter it in **AnkiKoFlash → Settings** on the device (recommended on Kobo).
 
 3. On the PC running Anki:
    - Install AnkiConnect (Tools → Add-ons → `2055492159`)
-   - Use your PC’s **LAN IP** in the plugin, not `localhost`
+   - Use your PC's **LAN IP** in the plugin, not `localhost`
 
 4. Restart KOReader.
 
@@ -159,14 +151,12 @@ The plugin sends notes via AnkiConnect — field names and note types must exist
 
 | Workflow | Plugin menu | Anki note type | Default deck | Setup guide |
 |----------|-------------|----------------|--------------|-------------|
-| Wiki Card (AI) | Wiki Card (AI) | Wiki Card | `English::Koreader` | [anki-vocabulary.md](docs/anki-vocabulary.md) |
-| Vocabulary Card (No AI) | Vocabulary Card (No AI) | Vocabulary Card | `English::Koreader` | [anki-vocabulary-card.md](docs/anki-vocabulary-card.md) |
-| Memorization | Memorization Card (No AI, Multi-Line) | Memorization | `Memorize` (+ subdecks) | [anki-memorization.md](docs/anki-memorization.md) |
+| Vocabulary Card | Vocabulary Card | Vocabulary Card | `English::Koreader` | [anki-vocabulary-card.md](docs/anki-vocabulary-card.md) |
+| Memorization | Memorization Card | Memorization | `Memorize` (+ subdecks) | [anki-memorization.md](docs/anki-memorization.md) |
 
 Create deck-options presets in Anki:
 
-- **Wiki Card** — for AI reading notes (higher daily limits)
-- **Vocabulary Card** — for dictionary drill cards (similar limits; can share Wiki Card preset)
+- **Vocabulary Card** — for dictionary drill cards
 - **Memorize** — for step/full cards (lower new-card cap, verbatim tuning)
 
 ## Configuration
@@ -174,26 +164,36 @@ Create deck-options presets in Anki:
 | Setting | Where |
 |---------|--------|
 | AnkiConnect URL | **Settings → Anki connection…** or `configuration.lua` → `anki.url` |
-| Wiki / Vocabulary / Memorization note types | **Settings → Card defaults…** (per card type) |
-| Default deck (Wiki) | **Settings → Card defaults → Wiki Card…** |
+| Vocabulary / Memorization note types | **Settings → Card defaults…** (per card type) |
 | Default deck (Vocabulary) | **Settings → Card defaults → Vocabulary Card…** |
-| Hub menu label (Wiki / Vocabulary) | **Settings → Card defaults → Wiki Card…** or **Vocabulary Card…** (empty = default hub text) |
+| Hub menu label (Vocabulary) | **Settings → Card defaults → Vocabulary Card…** (empty = default hub text) |
 | Memorization parent deck | **Settings → Card defaults → Memorization Card…** |
-| Subdeck by book (Wiki/Vocab) | **Settings → Card defaults → Where cards go…** |
+| Subdeck by book (Vocabulary) | **Settings → Card defaults → Where cards go…** |
+| Preferred dictionary | **Settings → Card defaults → Vocabulary Card…** |
+| Etymology dictionary | **Settings → Card defaults → Vocabulary Card…** |
 | One-tap send (per card type) | **Settings → Card defaults…** |
+| Save only (skip send to Anki) | **AnkiKoFlash hub menu** (toggle) |
 | Memorization split/context behavior | **Settings → Memorization options…** |
+| Confirm before very large memorization sends | **Settings → Memorization options → Max memorization steps** (default 80) |
 | Sync to AnkiWeb after send | **Settings → Anki connection…** (default ON) |
-| API keys | **Settings → AI Settings → API Keys** (Wiki Card only) |
 | Send pending when WiFi (every 20 min) | **Settings → Sync…** |
 
 Details: [docs/plugin-configuration.md](docs/plugin-configuration.md). In Settings on device, **tap gray rows for help.**
 
-`configuration.lua` is **gitignored** — never commit API keys or LAN URLs.
+`configuration.lua` is **gitignored** — never commit LAN URLs or local settings.
+
+### Reliability and recovery
+
+- Pending cards and settings are written atomically. An interrupted replacement may leave an owned `.atomic-json.bak`; the plugin restores it on the next access when the canonical file is missing.
+- AnkiConnect automatically retries only transient, idempotent reads. It never blindly retries note creation or other writes. After an ambiguous send, it verifies the note in Anki before clearing the queue.
+- Memorization notes are sent in batches of at most 50. Passages above **Max memorization steps** require confirmation and are never silently truncated.
+- If only part of a memorization passage is confirmed in Anki, the original passage remains pending so it can be retried safely.
+- Failed settings writes are reported and the in-memory edit is rolled back. Logs omit highlight text, credentials, request bodies, and credential-bearing URLs.
 
 ## Development (WSL emulator)
 
 ```bash
-# AnkiKOAi + TagBankHighlightSync: sync both, launch once (recommended)
+# AnkiKoFlash + TagBankHighlightSync: sync both, launch once (recommended)
 bash dev-start.sh --emulator alice.epub
 
 # One-time WebDAV + cloud plugin setup (TagBankHighlightSync repo):
@@ -203,27 +203,34 @@ bash dev-start.sh --emulator alice.epub
 # Sync without launching (then launch once manually or via dev-start.sh without --sync-only)
 bash dev-start.sh --sync-only
 
-# AnkiKOAi only
+# AnkiKoFlash only
 bash start.sh --emulator alice.epub
 bash start.sh --sync-only
 ```
+
+Run the complete local validation suite with:
+
+```bash
+bash _check.sh
+```
+
+The suite owns and removes only its temporary test directories; do not use broad `git clean` as test cleanup.
 
 Set `KOREADER_DIR` if your emulator is not at `~/koreader-dev/emulator/usr/lib/koreader`.
 
 On WSL, avoid two full emulator launches per session — a second launch often triggers WSLg
 `[WARN: COPY MODE]` in the taskbar (not in terminal logs). AppImage from WSL still uses WSLg.
 
-For Cursor / local AI context: copy `LOCAL_DEV.md.sample` → `LOCAL_DEV.md` (gitignored) and edit paths for your machine. Attach `@LOCAL_DEV.md` in chat anytime.
+For Cursor context: copy `LOCAL_DEV.md.sample` → `LOCAL_DEV.md` (gitignored) and edit paths for your machine. Attach `@LOCAL_DEV.md` in chat anytime.
 
 ## About this plugin
 
-**AnkiKOAi** connects reading on KOReader to spaced repetition in Anki. Highlight text → **View All Highlights** (browse/delete/batch), **AnkiKOAi** hub → **Wiki Card (AI)**, **Vocabulary Card (No AI)**, **Memorization Card (No AI, Multi-Line)**, **My Cards**, batch highlights, or settings.
+**AnkiKoFlash** connects reading on KOReader to spaced repetition in Anki. Highlight text → **View All Highlights** (browse/delete/batch), **AnkiKoFlash** hub → **Vocabulary Card**, **Memorization Card**, **My Cards**, batch highlights, or settings.
 
 ## Publishing / cloning safely
 
 - Commit **`configuration.lua.sample`** only (placeholders).
 - Do **not** commit `configuration.lua`, `*.json` card/settings files, or `koreader.log`.
-- If an API key was ever committed or shared, **revoke and rotate it** in the provider console.
 
 **Publishing to GitHub:** [docs/publishing.md](docs/publishing.md) — repo setup, release zip, GitHub topics (`koreader-plugin` for AppStore), and discoverability.
 
@@ -235,3 +242,4 @@ MIT — see [LICENSE](LICENSE).
 
 - Memorization flow inspired by [AnkiLPCG](https://ankilpcg.readthedocs.io/)
 - Anki integration via [AnkiConnect](https://foosoft.net/projects/anki-connect/)
+- Etymology dictionary derived from the Wiktionary English StarDict snapshot (CC BY-SA)

@@ -18,21 +18,6 @@ local function merged_anki_settings(config)
     return cfg
 end
 
-local function raw_wiki_note_type(ac)
-    ac = ac or {}
-    return ac.wiki_note_type or ac.note_type or ac.model
-end
-
-function CardFields.default_wiki_model(config)
-    local ac = merged_anki_settings(config)
-    local name = NoteTypeProfiles.normalize_model_name(
-        raw_wiki_note_type(ac) or NoteTypeProfiles.DEFAULT_MODEL)
-    if NoteTypeProfiles.is_wiki_compatible(name) then
-        return name
-    end
-    return NoteTypeProfiles.DEFAULT_MODEL
-end
-
 function CardFields.default_vocabulary_model(config)
     local ac = merged_anki_settings(config)
     local name = ac.vocabulary_model or NoteTypeProfiles.VOCABULARY_CARD_MODEL
@@ -55,50 +40,89 @@ function CardFields.default_memorization_model(config)
     return NoteTypeProfiles.MEMORIZATION_MODEL
 end
 
--- Fix legacy settings where vocabulary/memorization types were saved as wiki default.
--- Mutates settings in place. Returns optional user-facing notice (newline-separated).
+-- Scrub retired AI / Wiki Card settings, any stored API keys, and migrate
+-- legacy vocabulary/memorization settings. Mutates settings in place.
+-- Returns optional user-facing notice (newline-separated).
 function CardFields.migrate_anki_settings(settings)
     if type(settings) ~= "table" then return settings, nil end
 
     local notices = {}
-    local legacy = raw_wiki_note_type(settings)
-
-    if legacy and legacy ~= "" then
-        legacy = NoteTypeProfiles.normalize_model_name(legacy)
-        if NoteTypeProfiles.is_vocabulary_card(legacy) then
-            if not settings.vocabulary_model or settings.vocabulary_model == "" then
-                settings.vocabulary_model = legacy
-            end
-            legacy = NoteTypeProfiles.DEFAULT_MODEL
-            table.insert(notices, _(
-                "Vocabulary Card was set as the wiki default; reset to Wiki Card."))
-        elseif NoteTypeProfiles.is_memorization(legacy) then
-            if not settings.memorize_model or settings.memorize_model == "" then
-                settings.memorize_model = legacy
-            end
-            settings.memorize = settings.memorize or {}
-            if type(settings.memorize) == "table"
-               and (not settings.memorize.model or settings.memorize.model == "") then
-                settings.memorize.model = legacy
-            end
-            legacy = NoteTypeProfiles.DEFAULT_MODEL
-            table.insert(notices, _(
-                "Memorization was set as the wiki default; reset to Wiki Card."))
+    local migration_changed = false
+    local function set_value(key, value)
+        if settings[key] ~= value then
+            settings[key] = value
+            migration_changed = true
+        end
+    end
+    local function clear_value(key)
+        if settings[key] ~= nil then
+            settings[key] = nil
+            migration_changed = true
+        end
+    end
+    local function ensure_memorize_table()
+        if type(settings.memorize) ~= "table" then
+            set_value("memorize", {})
+        end
+        return settings.memorize
+    end
+    local function set_memorize_model(value)
+        local memorize = ensure_memorize_table()
+        if memorize.model ~= value then
+            memorize.model = value
+            migration_changed = true
         end
     end
 
-    local wiki = NoteTypeProfiles.normalize_model_name(
-        settings.wiki_note_type or legacy or NoteTypeProfiles.DEFAULT_MODEL)
-    if not NoteTypeProfiles.is_wiki_compatible(wiki) then
-        wiki = NoteTypeProfiles.DEFAULT_MODEL
-        table.insert(notices, _("Invalid wiki note type; using Wiki Card."))
+    -- Retired Wiki Card keys and every AI provider / API-key / prompt key.
+    local scrub_keys = {
+        "wiki_note_type", "wiki_model", "wiki_deck", "wiki_card_hub_label",
+        "wiki_hub_label", "auto_send_wiki", "wiki_enabled", "model",
+        "text_provider", "openai_api_key", "gemini_api_key", "dashscope_api_key",
+        "openrouter_api_key", "openrouter_model", "anthropic_api_key",
+        "google_api_key", "custom_prompts", "prompt_suffix", "default_prompt",
+        "prompts", "llm_model", "llm_provider",
+    }
+    for _, key in ipairs(scrub_keys) do
+        clear_value(key)
     end
-    settings.wiki_note_type = wiki
-    settings.model = wiki
+
+    -- send_on_save (removed) → per-type auto-send toggles
+    if settings.send_on_save == true then
+        if settings.auto_send_vocabulary ~= true then
+            set_value("auto_send_vocabulary", true)
+        end
+        if settings.auto_send_memorization ~= true then
+            set_value("auto_send_memorization", true)
+        end
+        clear_value("send_on_save")
+        table.insert(notices, _(
+            "“Send after generate” is now per card type under Card defaults."))
+    end
+
+    -- Legacy memorization auto-send key
+    if settings.memorize_auto_send == true and settings.auto_send_memorization ~= true then
+        set_value("auto_send_memorization", true)
+    end
+    clear_value("memorize_auto_send")
+
+    -- Legacy skip-hub → unified toggle when unset
+    if settings.auto_send_skip_hub_submenu == nil
+       and settings.memorize_skip_hub_submenu == true then
+        set_value("auto_send_skip_hub_submenu", true)
+    end
+
+    -- Legacy shared deck → per-type defaults
+    local legacy_deck = (settings.deck and settings.deck ~= "") and settings.deck or nil
+    if legacy_deck then
+        if not settings.vocabulary_deck or settings.vocabulary_deck == "" then
+            set_value("vocabulary_deck", legacy_deck)
+        end
+    end
 
     local vocab = settings.vocabulary_model or NoteTypeProfiles.VOCABULARY_CARD_MODEL
     if not NoteTypeProfiles.is_vocabulary_compatible(vocab) then
-        settings.vocabulary_model = NoteTypeProfiles.VOCABULARY_CARD_MODEL
+        set_value("vocabulary_model", NoteTypeProfiles.VOCABULARY_CARD_MODEL)
         table.insert(notices, _("Invalid vocabulary note type; using Vocabulary Card."))
     end
 
@@ -107,74 +131,31 @@ function CardFields.migrate_anki_settings(settings)
         mem = settings.memorize.model
     end
     if mem and mem ~= "" and not NoteTypeProfiles.is_memorization_compatible(mem) then
-        settings.memorize_model = NoteTypeProfiles.MEMORIZATION_MODEL
-        settings.memorize = settings.memorize or {}
-        settings.memorize.model = NoteTypeProfiles.MEMORIZATION_MODEL
+        set_value("memorize_model", NoteTypeProfiles.MEMORIZATION_MODEL)
+        set_memorize_model(NoteTypeProfiles.MEMORIZATION_MODEL)
         table.insert(notices, _("Invalid memorization note type; using Memorization."))
     end
 
-    -- send_on_save (removed) → per-type auto-send toggles
-    if settings.send_on_save == true then
-        if settings.auto_send_wiki ~= true then
-            settings.auto_send_wiki = true
-        end
-        if settings.auto_send_vocabulary ~= true then
-            settings.auto_send_vocabulary = true
-        end
-        if settings.auto_send_memorization ~= true then
-            settings.auto_send_memorization = true
-        end
-        settings.send_on_save = nil
-        table.insert(notices, _(
-            "“Send after generate” is now per card type under Card defaults."))
-    end
-
-    -- Legacy memorization auto-send key
-    if settings.memorize_auto_send == true and settings.auto_send_memorization ~= true then
-        settings.auto_send_memorization = true
-    end
-    settings.memorize_auto_send = nil
-
-    -- Legacy skip-hub → unified toggle when unset
-    if settings.auto_send_skip_hub_submenu == nil
-       and settings.memorize_skip_hub_submenu == true then
-        settings.auto_send_skip_hub_submenu = true
-    end
-
-    -- Legacy shared deck → per-type defaults
-    local legacy_deck = (settings.deck and settings.deck ~= "") and settings.deck or nil
-    if legacy_deck then
-        if not settings.wiki_deck or settings.wiki_deck == "" then
-            settings.wiki_deck = legacy_deck
-        end
-        if not settings.vocabulary_deck or settings.vocabulary_deck == "" then
-            settings.vocabulary_deck = legacy_deck
+    if settings.max_memorization_steps == nil then
+        set_value("max_memorization_steps", 80)
+    else
+        local max_steps = tonumber(settings.max_memorization_steps)
+        if not max_steps or max_steps < 1 then
+            set_value("max_memorization_steps", 80)
+        else
+            local normalized = math.floor(max_steps)
+            if settings.max_memorization_steps ~= normalized then
+                set_value("max_memorization_steps", normalized)
+            end
         end
     end
 
-    if #notices == 0 then return settings, nil end
-    return settings, table.concat(notices, "\n")
+    if #notices == 0 then return settings, nil, migration_changed end
+    return settings, table.concat(notices, "\n"), migration_changed
 end
 
 function CardFields.merged_anki_settings(config)
     return merged_anki_settings(config)
-end
-
--- Top-level config (API keys, providers) overlaid with saved anki settings.
-function CardFields.effective_config(config)
-    local eff = {}
-    if config then
-        for k, v in pairs(config) do
-            if k ~= "anki" then eff[k] = v end
-        end
-    end
-    -- Top-level `model` is the LLM id (e.g. qwen-plus); Anki note type overwrites `model` below.
-    if eff.model and eff.model ~= "" then
-        eff.llm_model = eff.model
-    end
-    local anki = merged_anki_settings(config)
-    for k, v in pairs(anki) do eff[k] = v end
-    return eff
 end
 
 -- Citation string from open book metadata (preferred for Source field).
@@ -218,17 +199,13 @@ function CardFields.apply_reading_source(card, title, author, fallback, location
     end
 end
 
--- Sync legacy flat keys from anki_fields (Information card layout).
+-- Sync legacy flat keys from anki_fields.
 function CardFields.sync_flat_from_anki(card)
     if not card or type(card.anki_fields) ~= "table" then return end
     local f = card.anki_fields
     card.phrase     = f.Phrase     or f.phrase     or card.phrase     or ""
-    card.ipa        = f.IPA        or f.ipa        or card.ipa        or ""
     card.definition = f.Definition or f.definition or card.definition or ""
-    card.synonyms   = f.Synonyms   or f.synonyms   or card.synonyms   or ""
-    card.text       = f.Text       or f.text       or f.Context      or f.context or card.text or ""
-    card.context    = f.Context    or f.context    or card.context   or card.text or ""
-    card.links      = f.Links      or f.links      or card.links      or ""
+    card.context    = f.Context    or f.context    or card.context   or ""
     card.source     = f.Source     or f.source     or card.source     or ""
 end
 
@@ -238,19 +215,15 @@ function CardFields.sync_anki_from_flat(card)
     card.anki_fields = card.anki_fields or {}
     local f = card.anki_fields
     if card.phrase     and card.phrase     ~= "" then f.Phrase     = card.phrase     end
-    if card.ipa        and card.ipa        ~= "" then f.IPA        = card.ipa        end
     if card.definition and card.definition ~= "" then f.Definition = card.definition end
-    if card.synonyms   and card.synonyms   ~= "" then f.Synonyms   = card.synonyms   end
-    if card.text       and card.text       ~= "" then f.Text       = card.text       end
     if card.context    and card.context    ~= "" then f.Context    = card.context    end
-    if card.links      and card.links      ~= "" then f.Links      = card.links      end
     if card.source     and card.source     ~= "" then f.Source     = card.source     end
 end
 
 function CardFields.normalize(card, config)
     if type(card) ~= "table" then return card end
     card.model = NoteTypeProfiles.normalize_model_name(
-        card.model or card.target_model or CardFields.default_wiki_model(config))
+        card.model or card.target_model or CardFields.default_vocabulary_model(config))
 
     if type(card.anki_fields) == "table" and next(card.anki_fields) then
         CardFields.sync_flat_from_anki(card)
@@ -262,24 +235,6 @@ function CardFields.normalize(card, config)
         card.phrase = card.anki_fields.Phrase or card.anki_fields.Front
                       or card.anki_fields.front or ""
     end
-    return card
-end
-
--- Merge LLM JSON (any key casing) into anki_fields for known Anki field names.
-function CardFields.apply_llm_fields(card, field_names, llm_data)
-    card.anki_fields = card.anki_fields or {}
-    local lower_map = {}
-    for k, v in pairs(llm_data or {}) do
-        lower_map[k:lower()] = v
-    end
-    for _, fname in ipairs(field_names or {}) do
-        if fname:lower() ~= "source" then
-            local val = llm_data[fname]
-            if val == nil then val = lower_map[fname:lower()] end
-            if val ~= nil then card.anki_fields[fname] = tostring(val) end
-        end
-    end
-    CardFields.sync_flat_from_anki(card)
     return card
 end
 
@@ -301,28 +256,27 @@ local function dictionary_value_for_field(fname, data)
        or n == "passage" or n == "usage" or n == "quote" or n == "excerpt" then
         return data.context, "context"
     end
-    if n == "ipa" or n == "pronunciation" or n == "reading" or n == "phonetic" then
-        return data.ipa, "ipa"
+    if n == "etymology" or n == "origin" or n == "root" or n == "derivation" then
+        return data.etymology, "etymology"
     end
-    if n == "source" or n == "reference" or n == "book" or n == "citation"
-       or n == "origin" then
+    if n == "source" or n == "reference" or n == "book" or n == "citation" then
         return data.source, "source"
     end
     return nil
 end
 
 -- Build the Anki field payload for a dictionary (no-AI) card, mapping the
--- looked-up word/definition/passage/source onto whatever fields the chosen
--- note type actually has. Falls back so content is never silently dropped.
+-- looked-up word/definition/etymology/passage/source onto whatever fields the
+-- chosen note type actually has. Falls back so content is never silently dropped.
 function CardFields.dictionary_fields_for_send(card, field_names)
     card = card or {}
     local af = card.anki_fields or {}
     local data = {
         phrase     = card.phrase     or af.Phrase     or "",
         definition = card.definition or af.Definition or "",
+        etymology  = card.etymology  or af.Etymology  or "",
         context    = card.context    or card.text or af.Context or "",
         source     = card.source     or af.Source     or "",
-        ipa        = card.ipa        or af.IPA        or "",
     }
 
     field_names = field_names or {}
@@ -330,6 +284,7 @@ function CardFields.dictionary_fields_for_send(card, field_names)
         return {
             Phrase     = data.phrase,
             Definition = data.definition,
+            Etymology  = data.etymology,
             Context    = data.context,
             Source     = data.source,
         }
@@ -367,6 +322,21 @@ function CardFields.dictionary_fields_for_send(card, field_names)
     return out
 end
 
+-- True when the chosen note type has no field that can hold a non-empty
+-- etymology, so ``dictionary_fields_for_send`` would silently drop it. Callers
+-- use this to surface a notice instead of losing the looked-up etymology.
+function CardFields.etymology_will_be_dropped(card, field_names)
+    if not card or not card.etymology or card.etymology == "" then
+        return false
+    end
+    local probe = { etymology = card.etymology }
+    for _, fname in ipairs(field_names or {}) do
+        local _, role = dictionary_value_for_field(fname, probe)
+        if role == "etymology" then return false end
+    end
+    return true
+end
+
 function CardFields.fields_for_send(card, field_names)
     local out = {}
     local src = card.anki_fields or {}
@@ -377,12 +347,9 @@ function CardFields.fields_for_send(card, field_names)
     if not next(out) then
         out = {
             Phrase     = card.phrase     or "",
-            IPA        = card.ipa        or "",
             Definition = card.definition or "",
-            Synonyms   = card.synonyms   or "",
-            Text       = card.text       or "",
-            Context    = card.context    or card.text or "",
-            Links      = card.links      or "",
+            Etymology  = card.etymology  or "",
+            Context    = card.context    or "",
             Source     = card.source     or "",
         }
     end
@@ -405,8 +372,8 @@ function CardFields.editable_field_list(card)
         return {
             { key = "phrase",     label = "Phrase" },
             { key = "definition", label = "Definition" },
-            { key = "synonyms",   label = "Synonyms" },
-            { key = "text",       label = "Broader Context" },
+            { key = "etymology",  label = "Etymology" },
+            { key = "context",    label = "Context" },
         }
     end
     return list
@@ -420,11 +387,7 @@ function CardFields.use_rich_viewer(card, config)
         if #names == 0 then return true end
         return NoteTypeProfiles.vocabulary_field_set(names)
     end
-    if not NoteTypeProfiles.is_wiki_card(card.model) then return false end
-    local names = {}
-    for k in pairs(card.anki_fields or {}) do table.insert(names, k) end
-    if #names == 0 then return true end
-    return NoteTypeProfiles.information_field_set(names)
+    return false
 end
 
 function CardFields.is_dictionary_card(card, config)

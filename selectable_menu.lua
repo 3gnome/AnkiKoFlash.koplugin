@@ -215,7 +215,7 @@ function SelectableMenu.append_list(items, opts)
                 end
                 UIManager:show(ConfirmBox:new {
                     text = opts.check_anki_selected_confirm
-                        or _("Check selected pending cards against Anki? Matches by Phrase in the target deck only. Does not create notes. Found cards are removed from the queue and logged to Recently sent."),
+                        or _("Check selected pending cards against Anki? Matches the exact intended note type, deck, and card fields. Does not create notes. Found cards are removed from the queue and logged to Recently sent."),
                     ok_text = _("Check Anki"),
                     ok_callback = function()
                         opts.on_check_anki_selected(picked, selected)

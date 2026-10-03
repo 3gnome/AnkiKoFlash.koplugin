@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create a GitHub release zip for AnkiKOAi and publish with gh.
+# Create a GitHub release zip for AnkiKoFlash and publish with gh.
 #
 # First-time setup (once per machine):
 #   gh auth login
@@ -15,7 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 META_FILE="$SCRIPT_DIR/_meta.lua"
-PLUGIN_FOLDER="AnkiKOAi.koplugin"
+PLUGIN_FOLDER="AnkiKoFlash.koplugin"
 ZIP_DIR="$(dirname "$SCRIPT_DIR")"
 
 VERSION=""
@@ -71,9 +71,9 @@ default_notes() {
     local ver="$1"
     cat <<EOF
 ## Install
-Download \`AnkiKOAi-v${ver}.zip\`, unzip, and copy the \`AnkiKOAi.koplugin\` folder into your KOReader \`plugins/\` directory.
+Download \`AnkiKoFlash-v${ver}.zip\`, unzip, and copy the \`AnkiKoFlash.koplugin\` folder into your KOReader \`plugins/\` directory.
 
-See [Getting started](https://github.com/3gnome/AnkiKOAi.koplugin/blob/main/docs/getting-started.md) for setup.
+See [Getting started](https://github.com/3gnome/AnkiKoFlash.koplugin/blob/main/docs/getting-started.md) for setup.
 EOF
 }
 
@@ -129,7 +129,7 @@ else
 fi
 
 TAG="v$VERSION"
-ZIP_NAME="AnkiKOAi-v$VERSION.zip"
+ZIP_NAME="AnkiKoFlash-v$VERSION.zip"
 ZIP_PATH="$ZIP_DIR/$ZIP_NAME"
 
 step "Building $ZIP_NAME"
@@ -180,5 +180,5 @@ else
     gh release create "$TAG" "$ZIP_PATH" --title "$TAG" --notes "$NOTES"
 fi
 
-step "Done: https://github.com/3gnome/AnkiKOAi.koplugin/releases/tag/$TAG"
+step "Done: https://github.com/3gnome/AnkiKoFlash.koplugin/releases/tag/$TAG"
 echo "Zip: $ZIP_PATH"

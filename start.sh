@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launch KOReader with the AnkiKOAi plugin only (see dev-start.sh for both plugins).
+# Launch KOReader with the AnkiKoFlash plugin only (see dev-start.sh for both plugins).
 #
 # Usage:
 #   bash start.sh --sync-only
@@ -13,13 +13,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=dev-lib.sh
 source "$SCRIPT_DIR/dev-lib.sh"
 
-ANKIKOOAI_SRC="${PLUGIN_DIR:-$SCRIPT_DIR}"
+ANKIKOFLASH_SRC="${PLUGIN_DIR:-$SCRIPT_DIR}"
 
 print_help() {
     cat <<'EOF'
-start.sh - Launch KOReader with the AnkiKOAi plugin
+start.sh - Launch KOReader with the AnkiKoFlash plugin
 
-For AnkiKOAi + TagBankHighlightSync together, use: bash dev-start.sh --emulator [book]
+For AnkiKoFlash + TagBankHighlightSync together, use: bash dev-start.sh --emulator [book]
 
 MODES
   appimage   Launch AppImage (DEFAULT on WSL; still uses WSLg; no plugin sync)
@@ -99,7 +99,7 @@ if [ "$MODE" = "emulator" ] || [ "$SYNC_ONLY" -eq 1 ]; then
         echo "ERROR: KOReader emulator not found at: $KOREADER" >&2
         exit 1
     fi
-    sync_ankikooai "$ANKIKOOAI_SRC" "${PLUGIN_DST:-$ANKIKOOAI_DST}"
+    sync_ankikoflash "$ANKIKOFLASH_SRC" "${PLUGIN_DST:-$ANKIKOFLASH_DST}"
 fi
 
 if [ "$SYNC_ONLY" -eq 1 ]; then

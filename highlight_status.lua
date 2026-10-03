@@ -1,6 +1,7 @@
 -- Update highlight colors for saved / sent cards.
 
 local PluginConstants = require("plugin_constants")
+local PositionUtils = require("position_utils")
 
 local HighlightStatus = {}
 
@@ -9,7 +10,8 @@ local function find_annotation(ui, pos0, pos1)
         return nil
     end
     for idx, ann in ipairs(ui.annotation.annotations) do
-        if ann.pos0 == pos0 and (not pos1 or ann.pos1 == pos1) then
+        if PositionUtils.equal(ann.pos0, pos0)
+            and (not pos1 or PositionUtils.equal(ann.pos1, pos1)) then
             return ann, idx
         end
     end

@@ -134,7 +134,7 @@ function DeckPicker.show(config, card, on_select, opts)
                 _("Send to: ") .. AnkiSync.resolve_deck_name(config, card, current))
         end
         if from_cache then
-            table.insert(subtitle_parts, _("Offline — cached deck list"))
+            table.insert(subtitle_parts, _("Offline — cached deck list (may be stale)"))
         end
 
         for _i, name in ipairs(ordered) do

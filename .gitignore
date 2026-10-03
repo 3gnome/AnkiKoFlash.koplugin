@@ -4,7 +4,7 @@ configuration.lua
 # Plugin runtime data (stored on device under KOReader settings)
 *_cards.json
 *_settings.json
-ankikooai_recent_sent.json
+ankikoflash_recent_sent.json
 
 # Dev / emulator logs
 koreader.log
@@ -12,9 +12,16 @@ koreader-emulator.log
 *.log
 debug-*.log
 
+# Offline dictionaries (downloaded/built, never committed)
+dictionaries/
+scripts/build_etymology_dict.py.d/
+
 # Local Cursor / machine-specific dev context (see LOCAL_DEV.md.sample)
 LOCAL_DEV.md
 .cursor/
+
+# Cursor Shift tool state (machine-specific, may embed personal paths)
+.shift/
 
 # KOReader per-book sidecar metadata (created when opening a test book)
 *.sdr/
@@ -33,3 +40,11 @@ debug_*.png
 .idea/
 *.swp
 *~
+
+# Python
+__pycache__/
+*.pyc
+
+# Internal dev artifacts (not for public release)
+orchestrator_changelog.md
+scripts/_*

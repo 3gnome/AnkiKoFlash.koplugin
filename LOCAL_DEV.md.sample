@@ -1,4 +1,4 @@
-# AnkiKOAi — local dev context (Cursor / AI)
+# AnkiKoFlash — local dev context (Cursor)
 
 Copy this file to **`LOCAL_DEV.md`** (gitignored) and edit machine-specific paths:
 
@@ -6,11 +6,11 @@ Copy this file to **`LOCAL_DEV.md`** (gitignored) and edit machine-specific path
 cp LOCAL_DEV.md.sample LOCAL_DEV.md
 ```
 
-**Cursor:** attach `@LOCAL_DEV.md` at session start, or rely on `.cursor/rules/ankikooai-dev.mdc`
+**Cursor:** attach `@LOCAL_DEV.md` at session start
 **Cursor (v3+ / Glass):** `.code-workspace` files require the **Editor** window first — **Ctrl+Shift+N**
 (or **File → Open Editor Window**), then **Ctrl+Shift+P** → **Open Workspace from File...** →
 `koreader-dev.code-workspace` in a parent folder that contains both plugin repos. CLI: `cursor /path/to/koreader-dev.code-workspace --classic`.
-Both plugin repos as **sibling folders** (e.g. `~/AnkiKOAi.koplugin` and `~/tagbankhighlightsync.koplugin`).
+Both plugin repos as **sibling folders** (e.g. `~/AnkiKoFlash.koplugin` and `~/tagbankhighlightsync.koplugin`).
 
 ---
 
@@ -18,11 +18,11 @@ Both plugin repos as **sibling folders** (e.g. `~/AnkiKOAi.koplugin` and `~/tagb
 
 | Folder | Role |
 |--------|------|
-| **AnkiKOAi.koplugin** (this repo) | Highlights → Wiki / Vocab / Mem cards → AnkiConnect → desktop Anki |
+| **AnkiKoFlash.koplugin** (this repo) | Highlights → Vocab / Mem cards → AnkiConnect → desktop Anki |
 | **tagbankhighlightsync.koplugin** | Tag bank, JSON sync via cloud, Markdown quote library (sibling repo) |
 | **KOReader Highlights** (Desktop) | PC WebDAV root (`webdav.exe` :8181) + Obsidian vault for generated `library/` |
 
-**Workflow:** Read on KOReader → AnkiKOAi sends cards to Anki; TagBankHighlightSync tags highlights,
+**Workflow:** Read on KOReader → AnkiKoFlash sends cards to Anki; TagBankHighlightSync tags highlights,
 syncs `*.sdr.json`, and exports quote Markdown into `KOReader Highlights/library/`. JSON on WebDAV
 is the source of truth; Markdown is derived on **Sync now**.
 
@@ -36,7 +36,7 @@ launches once. TagBank’s `dev-start.sh` delegates here.
 
 Emulator one-time (TagBank repo): `setup-emulator-cloud.sh` + `configure-emulator-webdav.sh`.
 
-**AI read order:** (1) this file’s **Your goals & current focus**, (2) repo-specific sections below,
+**Read order:** (1) this file’s **Your goals & current focus**, (2) repo-specific sections below,
 (3) sibling `LOCAL_DEV.md.sample` only when the task crosses repos (sync, quote library, dev-start).
 
 ---
@@ -54,7 +54,7 @@ Edit only in **`LOCAL_DEV.md`** (gitignored). Update when priorities change.
 
 ## What this repo is
 
-KOReader Lua plugin (`AnkiKOAi.koplugin/`). Highlights → Wiki / Vocabulary / Memorization
+KOReader Lua plugin (`AnkiKoFlash.koplugin/`). Highlights → Vocabulary / Memorization
 cards → AnkiConnect → desktop Anki. All plugin logic is `*.lua` at the repo root.
 
 ---
@@ -63,15 +63,14 @@ cards → AnkiConnect → desktop Anki. All plugin logic is `*.lua` at the repo 
 
 | File | Role |
 |------|------|
-| `main.lua` | Entry, highlight hooks, wiki/vocab/mem flows, auto-send tick |
-| `card_defaults.lua` | **Central API** for per-type decks, models, auto-send flags |
+| `main.lua` | Entry, highlight hooks, vocab/mem flows, auto-send tick |
+| `card_defaults.lua` | **Central API** for per-type decks, models, auto-send flags, save-only |
 | `card_fields.lua` | Field normalization, settings migration |
-| `card_storage.lua` | `ankikooai_cards.json`, `ankikooai_settings.json` |
-| `settings_viewer.lua` | Settings UI (Menu + gray help rows, Card defaults, Where cards go, AI, sync) |
-| `plugin_menu.lua` | AnkiKOAi hub menu from highlight dialog |
+| `card_storage.lua` | `ankikoflash_cards.json`, `ankikoflash_settings.json` |
+| `settings_viewer.lua` | Settings UI (Menu + gray help rows, Card defaults, Where cards go, sync) |
+| `plugin_menu.lua` | AnkiKoFlash hub menu from highlight dialog |
 | `send_flow.lua` / `anki_sync.lua` | Send + AnkiConnect HTTP |
 | `deck_picker.lua` / `note_type_picker.lua` | Pick from Anki lists |
-| `card_generator.lua` | AI Wiki Card generation |
 | `dictionary_lookup.lua` | Vocabulary Card dictionary path |
 | `poetry_memorize.lua` | Memorization split + send |
 | `highlight_inbox.lua` | Batch highlight flows; **Switch book** in View All Highlights |
@@ -84,23 +83,20 @@ cards → AnkiConnect → desktop Anki. All plugin logic is `*.lua` at the repo 
 
 **Settings → Card defaults** — each card type has **note type + deck** (Anki pickers):
 
-- **Wiki Card…** — `wiki_note_type`, `wiki_deck`, `wiki_card_hub_label`, `auto_send_wiki`
-- **Vocabulary Card…** — `vocabulary_model`, `vocabulary_deck`, `vocabulary_card_hub_label`, dictionary, `auto_send_vocabulary`
+- **Vocabulary Card…** — `vocabulary_model`, `vocabulary_deck`, `vocabulary_card_hub_label`, dictionary, `auto_send_vocabulary`, `save_only_vocabulary` (hub-menu **Save only** toggle)
 - **Memorization Card…** — `memorize_model`, `memorize_parent_deck`, one-tap / quick button
-- **Where cards go…** — `subdeck_by_book`, `per_book_decks` (**not** default decks; Wiki/Vocabulary only)
+- **Where cards go…** — `subdeck_by_book`, `per_book_decks` (**not** default decks; Vocabulary only)
 - **Deck picker shortcuts…** — `favorite_decks`, `recent_decks` (manual send only)
 
 **Settings menus** use `Menu` with subtitle `SETTINGS_HELP_SUBTITLE` (`Tap gray rows for help.`) and `info_menu_item()` for dim tappable help rows. In-app guide: `docs/in-app/settings-ui.md` (`readme_viewer` id `settings`).
 
-**Hub labels:** `CardDefaults.wiki_hub_label(config)` / `vocabulary_hub_label(config)` — empty `wiki_card_hub_label` / `vocabulary_card_hub_label` → `PluginConstants` defaults. Used in `plugin_menu.lua`, `highlight_inbox.lua`.
-
-**Prompts & suffix** (`settings_viewer.lua` → `show_prompts`): Menu (not ButtonDialog); always edits `wiki_note_type`; `prompt_edit_model` synced on save. **View default** = `PromptBuilder.preview_*_builtin` (built-in template only); **Preview effective** = `preview_generate` / `preview_regen`.
+**Hub labels:** `CardDefaults.vocabulary_hub_label(config)` — empty `vocabulary_card_hub_label` → `PluginConstants` defaults. Used in `plugin_menu.lua`, `highlight_inbox.lua`.
 
 **Batch send** (`card_manager.lua`): `send_all_unsent` / `send_batch_items` → `AnkiSync.send_card_with_status` (duplicate → reconcile; network timeout → `note_exists_in_deck` verify). Manual batch shows **Sending… N/M** via `Notification` (`show_batch_progress`); gated with `not opts.background` (WiFi auto-send in `main.lua` stays silent). Reconcile via `CardReconcile.finish` → `record_recent_sent` + `delete_matching_card` + per-type highlight policy.
 
 **Check against Anki** (`CardManager.check_items_against_anki`): read-only `findNotes` via `resolve_deck_name` + Phrase; found → `CardReconcile.finish` status `checked`. My Cards: Check pending / Check Selected.
 
-**Recently sent:** `ankikooai_recent_sent.json`, max 50 entries; not synced in v1 (`card_sync.lua` unchanged).
+**Recently sent:** `ankikoflash_recent_sent.json`, max 50 entries; not synced in v1 (`card_sync.lua` unchanged).
 
 Use `CardDefaults.*` in code; do not read raw `config.deck` except as legacy fallback inside `card_defaults.lua`.
 
@@ -112,7 +108,7 @@ Use `CardDefaults.*` in code; do not read raw `config.deck` except as legacy fal
 |--------|------|-------|
 | Sample template | `configuration.lua.sample` | Committed |
 | Local secrets | `configuration.lua` | **Gitignored** |
-| On-device overrides | `ankikooai_settings.json` | In KOReader data dir; wins after first save |
+| On-device overrides | `ankikoflash_settings.json` | In KOReader data dir; wins after first save |
 
 ---
 
@@ -121,7 +117,7 @@ Use `CardDefaults.*` in code; do not read raw `config.deck` except as legacy fal
 From repo root in **WSL**:
 
 ```bash
-# Recommended: sync AnkiKOAi + TagBankHighlightSync, launch once (avoids second-launch COPY MODE)
+# Recommended: sync AnkiKoFlash + TagBankHighlightSync, launch once (avoids second-launch COPY MODE)
 bash dev-start.sh --emulator alice.epub
 
 # One-time: Cloud storage+ for TagBankHighlightSync (from tagbankhighlightsync repo):
@@ -142,9 +138,9 @@ bash dev-start.sh --emulator alice.epub 2>&1 | tee ~/koreader-emulator.log
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `KOREADER_DIR` | `~/koreader-dev/emulator/usr/lib/koreader` | Emulator tree |
-| `ANKIKOOAI_SRC` | This repo | AnkiKOAi rsync source |
+| `ANKIKOFLASH_SRC` | This repo | AnkiKoFlash rsync source |
 | `TAGBANKHIGHLIGHTSYNC_SRC` | `/path/to/tagbankhighlightsync.koplugin` | TagBankHighlightSync rsync source |
-| `PLUGIN_DST` | `~/koreader-dev/plugins/AnkiKOAi.koplugin` | AnkiKOAi rsync target |
+| `PLUGIN_DST` | `~/koreader-dev/plugins/AnkiKoFlash.koplugin` | AnkiKoFlash rsync target |
 
 **WSL default** (`bash start.sh` without flags) is **AppImage mode** — does **not** sync plugins.
 AppImage from WSL still uses **WSLg**; `[WARN: COPY MODE]` may appear in the **taskbar** only.
@@ -155,7 +151,7 @@ WSLg COPY MODE. Use `dev-start.sh` or `start.sh --sync-only` + one launch.
 **Machine-specific (edit in your `LOCAL_DEV.md`):**
 
 - WSL distro: `<!-- e.g. Ubuntu -->`
-- Repo path: `<!-- e.g. /mnt/c/Users/you/AnkiKOAi.koplugin -->`
+- Repo path: `<!-- e.g. /mnt/c/Users/you/AnkiKoFlash.koplugin -->`
 - Emulator data: `<!-- ~/koreader-dev/emulator/usr/lib/koreader/ -->`
 
 ### KOReader Highlights (WebDAV + quote library)
@@ -184,25 +180,25 @@ KOReader dev emulator logs to **stdout** (terminal), not always to a file.
 | Log | Typical path |
 |-----|----------------|
 | Captured session | `~/koreader-emulator.log` (via `tee` above) |
-| Emulator data dir | `~/koreader-dev/emulator/usr/lib/koreader/` (`ankikooai_*.json`, `settings/`) |
+| Emulator data dir | `~/koreader-dev/emulator/usr/lib/koreader/` (`ankikoflash_*.json`, `settings/`) |
 
 **Useful grep after a crash:**
 
 ```bash
-grep -E 'stack traceback|ERROR |WARN |ankikooai|AnkiKOAi|init failed' ~/koreader-emulator.log
+grep -E 'stack traceback|ERROR |WARN |ankikoflash|AnkiKoFlash|init failed' ~/koreader-emulator.log
 ```
 
 Plugin uses KOReader `logger` (`require("logger")`) → stdout. `main.lua` wraps highlight
-`init()` in `pcall`; failures show `ankikooai init failed:`.
+`init()` in `pcall`; failures show `ankikoflash init failed:`.
 
 **Highlight dialog rule:** `addToHighlightDialog` callbacks must **never return `nil`**.
 Use `show_in_highlight_dialog_func = function() return false end` to hide a button.
-Hub button id: `99_ankikooai` (`PluginConstants.HIGHLIGHT_DIALOG_ID_HUB`) — KOReader sorts
+Hub button id: `99_ankikoflash` (`PluginConstants.HIGHLIGHT_DIALOG_ID_HUB`) — KOReader sorts
 buttons by id string; `97_` / `98_` / `99_` prefixes keep plugin entries after core
-highlight actions (scroll if many plugins). **View All Highlights** = `97_ankikooai_view_all`.
+highlight actions (scroll if many plugins). **View All Highlights** = `97_ankikoflash_view_all`.
 
 **View All Highlights** opens `highlight_inbox.lua` — highlights for the current book (or **Switch book** for any book in reading history with sidecar highlights). **Sync All Highlights** runs Tag Bank cloud sync for every book in history (when Tag Bank is installed). Delete works only for the open book; batch Anki send works from sidecar text on other books.
-Also: **AnkiKOAi hub → View All Highlights** or **Highlights and Cards → Highlights to Anki**.
+Also: **AnkiKoFlash hub → View All Highlights** or **Highlights and Cards → Highlights to Anki**.
 
 **Dev-only reset script:** `scripts/reset_alice.sh` — PC Alice clean-slate (Anki, WebDAV, Obsidian); requires TagBank regen script in sibling repo.
 

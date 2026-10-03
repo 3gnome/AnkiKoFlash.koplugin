@@ -1,7 +1,7 @@
 -- Full-screen card viewer with front/back experience.
 --
--- Wiki Card front: highlighted term only.
--- Wiki Card back: encyclopedia-style article + Wikipedia explore links.
+-- Vocabulary Card front: highlighted term only.
+-- Vocabulary Card back: definition + etymology + context + source.
 
 local BD               = require("ui/bidi")
 local Blitbuffer       = require("ffi/blitbuffer")
@@ -30,7 +30,6 @@ local WidgetContainer  = require("ui/widget/container/widgetcontainer")
 local _                = require("gettext")
 
 local CardFields       = require("card_fields")
-local NoteTypeProfiles = require("note_type_profiles")
 local PluginConstants  = require("plugin_constants")
 local SendFlow         = require("send_flow")
 
@@ -43,17 +42,7 @@ local function ptf_bold(s)
 end
 
 -- Colors for special fields (tuned for e-ink visibility).
-local COLOR_ORANGE = Blitbuffer.ColorRGB32(0x7A, 0x35, 0x00, 0xFF)  -- synonyms: very dark orange
-local COLOR_RED    = Blitbuffer.ColorRGB32(0xBB, 0x00, 0x00, 0xFF)  -- IPA: deep red
 local COLOR_BLUE   = Blitbuffer.ColorRGB32(0x00, 0x3A, 0x75, 0xFF)  -- phrase (back): dark navy blue
-
--- Fields for rich Information card editing (generic types use dynamic list).
-local EDITABLE_FIELDS = {
-    { key = "phrase",     label = "Phrase" },
-    { key = "definition", label = "Definition" },
-    { key = "synonyms",   label = "Synonyms" },
-    { key = "text",       label = "Broader Context" },
-}
 
 local COLOR_GRAY = Blitbuffer.ColorRGB32(0x55, 0x55, 0x55, 0xFF)
 
@@ -70,11 +59,8 @@ local function snapshot_viewer_props(viewer)
         on_send               = viewer.on_send,
         on_quick_send         = viewer.on_quick_send,
         can_quick_send        = viewer.can_quick_send,
-        on_regenerate         = viewer.on_regenerate,
         on_update             = viewer.on_update,
-        on_regen_ipa          = viewer.on_regen_ipa,
         on_navigate_to_source = viewer.on_navigate_to_source,
-        on_regen_text         = viewer.on_regen_text,
         on_change_definition  = viewer.on_change_definition,
         on_highlight_dialog   = viewer.on_highlight_dialog,
         read_only             = viewer.read_only,
@@ -105,9 +91,9 @@ local function run_anki_send(viewer, send_fn)
 end
 
 CardViewer = InputContainer:extend {
-    name           = "ankikooai_card_viewer",
+    name           = "ankikoflash_card_viewer",
     modal          = true,
-    card           = nil,   -- card table: { phrase, ipa, definition, synonyms, text, source, … }
+    card           = nil,   -- card table: { phrase, definition, etymology, context, source, … }
     show_back      = false, -- false = front (question), true = back (answer)
     on_show_answer = nil,   -- function() — called when user flips to back
     on_show_front  = nil,   -- function() — called when user flips to front
@@ -115,11 +101,8 @@ CardViewer = InputContainer:extend {
     on_send        = nil,   -- function(done) — done(ok, err) after deck picker + send
     on_quick_send  = nil,   -- function(done) — resend with last deck + note type
     can_quick_send = false,
-    on_regenerate  = nil,   -- function()
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
-    on_regen_ipa   = nil,   -- function(new_phrase, card, new_viewer) — async IPA regen after phrase change
     on_navigate_to_source = nil, -- function() — jump to highlight position in book
-    on_regen_text  = nil,   -- function() — regenerate example sentence only
     on_change_definition = nil, -- function() — pick another dictionary entry (Vocabulary Card)
     on_highlight_dialog = nil, -- function() — open KOReader's native highlight dialog (color, style, delete…)
     read_only      = false,
@@ -208,7 +191,7 @@ function CardViewer:init()
 
         if not self.read_only then
             table.insert(buttons_row, {
-                text     = _("✏️ Edit"),
+                text     = _("Edit"),
                 callback = function() self:showEditDialog() end,
             })
         end
@@ -253,13 +236,6 @@ function CardViewer:init()
             table.insert(buttons_row, {
                 text     = _("Change def."),
                 callback = function() self.on_change_definition() end,
-            })
-        end
-
-        if not self.read_only and self.on_regenerate then
-            table.insert(buttons_row, {
-                text     = _("↻"),
-                callback = function() self.on_regenerate() end,
             })
         end
 
@@ -359,49 +335,34 @@ function CardViewer:init()
 
         content_widget = VerticalGroup:new {
             phrase_w,
-            VerticalSpan:new { width = big_gap },
-            make_text(_("Study the topic."), Font:getFace("cfont", 16), math.max(1, math.floor(text_h * 0.12)), COLOR_GRAY, "center"),
         }
 
     else
         local c             = self.card or {}
         local face          = Font:getFace("smallinfofont")
         local label_h       = math.max(1, math.floor(Screen:scaleBySize(22)))
-        local is_dict_card  = CardFields.is_dictionary_card(c, {})
-        local ctx_text      = c.text or c.context or ""
-        if not is_dict_card and c.definition and c.definition ~= "" then
-            if ctx_text ~= "" then
-                ctx_text = c.definition .. "\n\n" .. ctx_text
-            else
-                ctx_text = c.definition
-            end
-        end
-        local links_text = c.links or (c.anki_fields and c.anki_fields.Links) or ""
-        if links_text ~= "" then
-            links_text = links_text:gsub("<br%s*/?>", "\n")
-            links_text = links_text:gsub("<[^>]+>", "")
-            links_text = links_text:gsub("&amp;", "&"):gsub("&lt;", "<"):gsub("&gt;", ">")
-            links_text = links_text:gsub("&quot;", '"')
-        end
-        local has_links = not is_dict_card and links_text ~= ""
-        local overhead      = gap * 12 + label_h * (is_dict_card and 3 or (has_links and 3 or 2))
+        local ctx_text      = c.context or ""
+        local etymology     = c.etymology or (c.anki_fields and c.anki_fields.Etymology) or ""
+
+        local has_ety       = etymology ~= ""
+        local has_ctx       = ctx_text ~= ""
+        local section_count = (has_ety and 1 or 0) + (has_ctx and 1 or 0)
+        local overhead      = gap * 10 + label_h * (3 + section_count)
         local text_h        = avail_h - overhead
         local phrase_h      = math.max(1, math.floor(text_h * 0.08))
-        local def_h         = math.max(1, math.floor(text_h * (is_dict_card and 0.42 or 0.28)))
-        local syn_h         = is_dict_card and 0 or math.max(1, math.floor(text_h * 0.12))
-        local ctx_h         = math.max(1, math.floor(text_h * (is_dict_card and 0.42 or 0.52)))
-        local links_h       = has_links and math.max(1, math.floor(text_h * 0.18)) or 0
-        local src_h         = math.max(1, text_h - phrase_h - def_h - syn_h - ctx_h - links_h)
+        local def_h         = math.max(1, math.floor(text_h * 0.40))
+        local ety_h         = has_ety and math.max(1, math.floor(text_h * 0.24)) or 0
+        local ctx_h         = has_ctx and math.max(1, math.floor(text_h * 0.24)) or 0
+        local src_h         = math.max(1, text_h - phrase_h - def_h - ety_h - ctx_h)
 
         local phrase_w      = make_text(ptf_bold(c.phrase or ""), face, phrase_h, COLOR_BLUE, "left")
         local def_w         = make_text(c.definition or "", face, def_h, nil, "left", true)
-        local syn_w         = make_text(c.synonyms or "", face, syn_h, COLOR_ORANGE, "left")
+        local ety_w         = has_ety and make_text(etymology, face, ety_h, nil, "left", true) or nil
         local ctx_w         = make_text(ctx_text, face, ctx_h, nil, "left", true)
-        local links_w       = has_links and make_text(links_text, face, links_h, COLOR_ORANGE, "left") or nil
-        self.scroll_text_w  = ctx_w
+        self.scroll_text_w  = def_w
 
         local def_label = "DEFINITION"
-        if is_dict_card and c.dictionary_name and c.dictionary_name ~= "" then
+        if c.dictionary_name and c.dictionary_name ~= "" then
             def_label = c.dictionary_name:upper()
         end
 
@@ -410,30 +371,19 @@ function CardViewer:init()
             VerticalSpan:new { width = gap },
         }
 
-        if is_dict_card then
-            content_widget[#content_widget + 1] = make_section_header(def_label)
-            content_widget[#content_widget + 1] = def_w
-        else
-            content_widget[#content_widget + 1] = make_section_header("ARTICLE")
-            content_widget[#content_widget + 1] = ctx_w
-        end
+        content_widget[#content_widget + 1] = make_section_header(def_label)
+        content_widget[#content_widget + 1] = def_w
 
-        if is_dict_card and c.synonyms and c.synonyms ~= "" then
+        if has_ety then
             content_widget[#content_widget + 1] = VerticalSpan:new { width = gap * 2 }
-            content_widget[#content_widget + 1] = make_section_header("SYNONYMS")
-            content_widget[#content_widget + 1] = syn_w
+            content_widget[#content_widget + 1] = make_section_header("ETYMOLOGY")
+            content_widget[#content_widget + 1] = ety_w
         end
 
-        if is_dict_card and ctx_text ~= "" then
+        if has_ctx then
             content_widget[#content_widget + 1] = VerticalSpan:new { width = gap * 2 }
             content_widget[#content_widget + 1] = make_section_header("CONTEXT")
             content_widget[#content_widget + 1] = ctx_w
-        end
-
-        if has_links and links_w then
-            content_widget[#content_widget + 1] = VerticalSpan:new { width = gap * 2 }
-            content_widget[#content_widget + 1] = make_section_header("EXPLORE FURTHER")
-            content_widget[#content_widget + 1] = links_w
         end
 
         if c.source and c.source ~= "" then
@@ -441,14 +391,6 @@ function CardViewer:init()
             content_widget[#content_widget + 1] = make_section_header("SOURCE")
             content_widget[#content_widget + 1] = make_text(
                 c.source, face, src_h, COLOR_GRAY, "left")
-        end
-
-        if not is_dict_card then
-            local disclaimer_h = math.max(1, math.floor(Screen:scaleBySize(20)))
-            content_widget[#content_widget + 1] = VerticalSpan:new { width = gap }
-            content_widget[#content_widget + 1] = make_text(
-                _("AI-generated — verify facts before sending to Anki."),
-                Font:getFace("cfont", 14), disclaimer_h, COLOR_GRAY, "center")
         end
     end
 
@@ -498,12 +440,6 @@ function CardViewer:init()
                 rows[#rows + 1] = make_text(fields[2].val or "", face,
                     math.max(1, avail_h - math.floor(avail_h * 0.4)), nil, "left")
             end
-        else
-            rows[#rows + 1] = make_text(
-                _("AI-generated — verify facts before sending to Anki."),
-                Font:getFace("cfont", 14),
-                math.max(1, math.floor(Screen:scaleBySize(20))),
-                COLOR_GRAY, "center")
         end
         content_widget = VerticalGroup:new(rows)
         self.scroll_text_w = rows[#rows]
@@ -565,15 +501,6 @@ function CardViewer:showEditDialog()
             end,
         }})
     end
-    if self.on_regen_text then
-        table.insert(field_buttons, {{
-            text     = _("Regen Article"),
-            callback = function()
-                UIManager:close(sel_dlg)
-                self.on_regen_text()
-            end,
-        }})
-    end
     table.insert(field_buttons, {{
         text     = _("Cancel"),
         callback = function() UIManager:close(sel_dlg) end,
@@ -623,14 +550,9 @@ function CardViewer:editField(field_def)
                                 self.card,
                                 self.card.book_title,
                                 self.card.book_author)
-                            self.card.ipa    = ""
-                            if self.card.anki_fields then self.card.anki_fields.IPA = "" end
                         end
                         if self.on_update then self.on_update(self.card) end
-                        local new_v = self:update()
-                        if phrase_changed and self.on_regen_ipa then
-                            self.on_regen_ipa(new_val, self.card, new_v)
-                        end
+                        self:update()
                     end)
                 end,
             },
@@ -657,11 +579,8 @@ function CardViewer:update(new_card, new_show_back)
         on_send               = self.on_send,
         on_quick_send         = self.on_quick_send,
         can_quick_send        = self.can_quick_send,
-        on_regenerate         = self.on_regenerate,
         on_update             = self.on_update,
-        on_regen_ipa          = self.on_regen_ipa,
         on_navigate_to_source = self.on_navigate_to_source,
-        on_regen_text         = self.on_regen_text,
         on_change_definition  = self.on_change_definition,
         on_highlight_dialog   = self.on_highlight_dialog,
         read_only             = self.read_only,

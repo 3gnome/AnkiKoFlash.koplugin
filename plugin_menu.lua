@@ -1,4 +1,4 @@
--- AnkiKOAi hub menu — single highlight-menu entry for all plugin actions.
+-- AnkiKoFlash hub menu — single highlight-menu entry for all plugin actions.
 
 local Menu       = require("ui/widget/menu")
 local UIManager  = require("ui/uimanager")
@@ -28,26 +28,25 @@ local function show_readme(readme_id, opts)
     end
 end
 
-local function merge_settings_into_config(config, new_cfg)
+local function merge_settings_into_config(config, new_cfg, previous_settings)
     if not config or not new_cfg then return end
     config.anki = config.anki or {}
+    -- Settings callbacks provide the complete newly persisted table. Remove
+    -- keys from the prior persisted table first so successful nil deletions
+    -- (which pairs() cannot report) clear runtime state, while static config
+    -- keys that were never persisted remain intact.
+    for key, _value in pairs(previous_settings or {}) do
+        config.anki[key] = nil
+    end
+    -- sync_server predates this replacement merge and must also be clearable
+    -- when no prior-settings snapshot was available.
+    config.anki.sync_server = nil
     for k, v in pairs(new_cfg) do
         config.anki[k] = v
     end
-    for _i, key in ipairs({
-        "target_language",
-        "text_provider",
-        "dashscope_api_key",
-        "gemini_api_key",
-        "openai_api_key",
-        "openrouter_api_key",
-        "openrouter_model",
-    }) do
-        if new_cfg[key] then
-            config[key] = new_cfg[key]
-        end
-    end
 end
+
+PluginMenu.merge_settings_into_config = merge_settings_into_config
 
 function PluginMenu.show(hl, ctx, ui, config, actions)
     actions = actions or {}
@@ -89,6 +88,13 @@ function PluginMenu.show(hl, ctx, ui, config, actions)
             dim            = true,
             select_enabled = false,
         }
+    end
+
+    local CHECK_ON = "\xe2\x9c\x93 "
+
+    local function toggle_label(on, label)
+        if on then return CHECK_ON .. label .. ": ON" end
+        return label .. ": OFF"
     end
 
     local function card_submenu(readme_id, action_label, on_action)
@@ -144,14 +150,23 @@ function PluginMenu.show(hl, ctx, ui, config, actions)
                 if menu_ref[1] then menu_ref[1]:onCloseAllMenus() end
             end,
         },
+        section_label(_("Mode")),
+        {
+            text     = toggle_label(
+                CardDefaults.save_only_vocabulary(config),
+                _("Save only (skip send to Anki)")),
+            bold     = true,
+            callback = function()
+                config.anki = config.anki or {}
+                config.anki.save_only_vocabulary =
+                    not CardDefaults.save_only_vocabulary(config)
+                CardStorage.save_anki_settings(config.anki)
+                open_child(reopen_hub)
+            end,
+        },
         section_label(_("Create from highlight")),
     }
 
-    add_card_hub_entry(items, CardDefaults.wiki_hub_label(config), "wiki", "wiki", function()
-        if actions.on_wiki_card then
-            actions.on_wiki_card(reopen_hub)
-        end
-    end)
     add_card_hub_entry(items, CardDefaults.vocabulary_hub_label(config), "vocabulary", "vocabulary", function()
         if actions.on_vocabulary_card then
             actions.on_vocabulary_card(reopen_hub)
@@ -178,7 +193,7 @@ function PluginMenu.show(hl, ctx, ui, config, actions)
             open_child(function()
                 HighlightInbox.show(ui, config, {
                     on_back      = reopen_hub,
-                    back_label   = _("← Back to AnkiKOAi"),
+                    back_label   = _("← Back to AnkiKoFlash"),
                     title_prefix = _("View All Highlights"),
                 })
             end)
@@ -205,7 +220,7 @@ function PluginMenu.show(hl, ctx, ui, config, actions)
             open_child(function()
                 CardManager.show(config, book_title, ui, {
                     on_back    = reopen_hub,
-                    back_label = _("← Back to AnkiKOAi"),
+                    back_label = _("← Back to AnkiKoFlash"),
                 })
             end)
         end,
@@ -217,7 +232,7 @@ function PluginMenu.show(hl, ctx, ui, config, actions)
             open_child(function()
                 CardManager.show_manage(config, {
                     on_back    = reopen_hub,
-                    back_label = _("← Back to AnkiKOAi"),
+                    back_label = _("← Back to AnkiKoFlash"),
                     ui         = ui,
                 })
             end)
@@ -238,8 +253,15 @@ function PluginMenu.show(hl, ctx, ui, config, actions)
                     })
                     return
                 end
+                local previous_settings =
+                    CardStorage.load_anki_settings() or {}
                 SettingsViewer.show(config, function(new_cfg)
-                    merge_settings_into_config(config, new_cfg)
+                    merge_settings_into_config(
+                        config, new_cfg, previous_settings)
+                    previous_settings = {}
+                    for key, _value in pairs(new_cfg or {}) do
+                        previous_settings[key] = true
+                    end
                 end, {
                     parent_fn = reopen_hub,
                     ui        = ui,

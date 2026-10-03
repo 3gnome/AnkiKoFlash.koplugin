@@ -1,0 +1,13 @@
+[
+  {
+    "phrase": "Legacy wiki",
+    "book_title": "Old Book",
+    "definition": "Readable without migration",
+    "date": "2025-01-02"
+  },
+  {
+    "phrase": "Legacy vocabulary",
+    "book_title": "Old Book",
+    "ipa": "/old/"
+  }
+]

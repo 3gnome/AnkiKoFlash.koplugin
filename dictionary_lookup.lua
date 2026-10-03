@@ -1,4 +1,4 @@
--- Look up a word using KOReader's installed StarDict dictionaries (no AI).
+-- Look up a word using KOReader's installed StarDict dictionaries (offline).
 
 local Menu     = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
@@ -10,6 +10,79 @@ local DictionaryLookup = {}
 
 local MAX_DEFINITION = 4000
 local PREVIEW_LEN    = 72
+
+-- Decode a numeric Unicode codepoint to a UTF-8 byte sequence (Lua 5.1 has no
+-- native utf8 support, so the bytes are built by hand).
+local function utf8_from_codepoint(cp)
+    cp = tonumber(cp)
+    if not cp or cp < 0 or cp > 0x10FFFF or (cp >= 0xD800 and cp <= 0xDFFF) then
+        return ""
+    end
+    if cp < 0x20 then return " " end
+    if cp < 0x80 then
+        return string.char(cp)
+    elseif cp < 0x800 then
+        return string.char(0xC0 + math.floor(cp / 0x40), 0x80 + cp % 0x40)
+    elseif cp < 0x10000 then
+        return string.char(0xE0 + math.floor(cp / 0x1000),
+                           0x80 + math.floor(cp / 0x40) % 0x40,
+                           0x80 + cp % 0x40)
+    else
+        return string.char(0xF0 + math.floor(cp / 0x40000),
+                           0x80 + math.floor(cp / 0x1000) % 0x40,
+                           0x80 + math.floor(cp / 0x40) % 0x40,
+                           0x80 + cp % 0x40)
+    end
+end
+
+-- Named HTML entities (name -> codepoint) that appear in dictionary bodies.
+local NAMED_ENTITY_CP = {
+    amp = 0x26, lt = 0x3C, gt = 0x3E, quot = 0x22, apos = 0x27,
+    mdash = 0x2014, ndash = 0x2013, hellip = 0x2026,
+    lsquo = 0x2018, rsquo = 0x2019, ldquo = 0x201C, rdquo = 0x201D,
+    bull = 0x2022, middot = 0x00B7, deg = 0x00B0,
+    eacute = 0x00E9, egrave = 0x00E8, ecirc = 0x00EA, euml = 0x00EB,
+    aacute = 0x00E1, agrave = 0x00E0, acirc = 0x00E2, auml = 0x00E4, aring = 0x00E5,
+    iacute = 0x00ED, igrave = 0x00EC, icirc = 0x00EE, iuml = 0x00EF,
+    oacute = 0x00F3, ograve = 0x00F2, ocirc = 0x00F4, ouml = 0x00F6,
+    uacute = 0x00FA, ugrave = 0x00F9, ucirc = 0x00FB, uuml = 0x00FC,
+    ntilde = 0x00F1, ccedil = 0x00E7, szlig = 0x00DF,
+    Eacute = 0x00C9, Egrave = 0x00C8, Ecirc = 0x00CA, Euml = 0x00CB,
+    Aacute = 0x00C1, Agrave = 0x00C0, Acirc = 0x00C2, Auml = 0x00C4, Aring = 0x00C5,
+    Iacute = 0x00CD, Igrave = 0x00CC, Icirc = 0x00CE, Iuml = 0x00CF,
+    Oacute = 0x00D3, Ograve = 0x00D2, Ocirc = 0x00D4, Ouml = 0x00D6,
+    Uacute = 0x00DA, Ugrave = 0x00D9, Ucirc = 0x00DB, Uuml = 0x00DC,
+    Ntilde = 0x00D1, Ccedil = 0x00C7,
+}
+
+local function decode_entities(text)
+    text = text:gsub("&nbsp;", " ")
+    text = text:gsub("&(%a+);", function(name)
+        local cp = NAMED_ENTITY_CP[name] or NAMED_ENTITY_CP[name:lower()]
+        if not cp then return "&" .. name .. ";" end
+        return utf8_from_codepoint(cp)
+    end)
+    text = text:gsub("&#[xX](%x+);", function(h)
+        return utf8_from_codepoint(tonumber(h, 16))
+    end)
+    text = text:gsub("&#(%d+);", function(n)
+        return utf8_from_codepoint(tonumber(n))
+    end)
+    return text
+end
+
+local function truncate_utf8(s, max)
+    if #s <= max then return s end
+    local cut = max
+    -- Back up to a lead byte so we never split a multi-byte character.
+    while cut > 0 do
+        local b = s:byte(cut)
+        if b < 0x80 or b >= 0xC0 then break end
+        cut = cut - 1
+    end
+    if cut == 0 then cut = max end
+    return s:sub(1, cut) .. "..."
+end
 
 local function strip_html(html, keep_newlines)
     if not html or html == "" then return "" end
@@ -25,23 +98,12 @@ local function strip_html(html, keep_newlines)
         text = text:gsub("</%s*[hH][1-6]%s*>", "\n")
         text = text:gsub("</%s*[dD][dDtT]%s*>", "\n")
     else
-        text = text:gsub("<br%s*/?>", " ")
+        text = text:gsub("<%s*[bB][rR]%s*/?>", " ")
     end
     -- Replace any remaining tag with a space (never an empty string) so inline
     -- elements like <b>Adverb</b>In… don't glue into "AdverbIn".
     text = text:gsub("<[^>]+>", " ")
-    text = text:gsub("&nbsp;", " ")
-    text = text:gsub("&amp;", "&")
-    text = text:gsub("&lt;", "<")
-    text = text:gsub("&gt;", ">")
-    text = text:gsub("&quot;", '"')
-    text = text:gsub("&#(%d+);", function(n)
-        local num = tonumber(n)
-        if num and num >= 32 and num <= 126 then
-            return string.char(num)
-        end
-        return " "
-    end)
+    text = decode_entities(text)
     if keep_newlines then
         text = text:gsub("[ \t]+", " ")
         text = text:gsub("\n[ \t]+", "\n")
@@ -51,18 +113,13 @@ local function strip_html(html, keep_newlines)
     else
         text = text:gsub("[ \t\r\n]+", " "):match("^%s*(.-)%s*$") or ""
     end
-    if #text > MAX_DEFINITION then
-        text = text:sub(1, MAX_DEFINITION) .. "..."
-    end
+    text = truncate_utf8(text, MAX_DEFINITION)
     return text
 end
 
 local function preview_text(definition)
     local s = (definition or ""):gsub("\n", " "):match("^%s*(.-)%s*$") or ""
-    if #s > PREVIEW_LEN then
-        return s:sub(1, PREVIEW_LEN) .. "..."
-    end
-    return s
+    return truncate_utf8(s, PREVIEW_LEN)
 end
 
 local function reader_settings()
@@ -102,14 +159,15 @@ local function normalize_entry(raw, fallback_word)
     local definition = strip_html(raw.definition or "", true)
     if definition == "" then return nil end
     return {
-        word       = raw.word or fallback_word,
+        word       = (raw.word and raw.word ~= "") and raw.word or fallback_word,
         definition = definition,
         dict       = raw.dict or "",
         preview    = preview_text(definition),
     }
 end
 
-local function run_lookup(ui, word)
+local function run_lookup(ui, word, opts)
+    opts = opts or {}
     word = (word or ""):match("^%s*(.-)%s*$") or ""
     if word == "" then
         return nil, _("No word to look up")
@@ -144,18 +202,31 @@ local function run_lookup(ui, word)
         end
     end
 
+    -- Exclude a single dictionary (e.g. the etymology dictionary) from the
+    -- definition results, but never let the exclusion empty the result set.
+    local exclude = opts.exclude_dictionary
+    if exclude and exclude ~= "" then
+        local kept = {}
+        for _i, entry in ipairs(entries) do
+            if (entry.dict or "") ~= exclude then
+                table.insert(kept, entry)
+            end
+        end
+        if #kept > 0 then entries = kept end
+    end
+
     if #entries == 0 then
         return nil, _("No dictionary entry found for this word")
     end
     return entries
 end
 
-function DictionaryLookup.lookup_all(ui, word)
-    return run_lookup(ui, word)
+function DictionaryLookup.lookup_all(ui, word, opts)
+    return run_lookup(ui, word, opts)
 end
 
-function DictionaryLookup.lookup(ui, word)
-    local entries, err = run_lookup(ui, word)
+function DictionaryLookup.lookup(ui, word, opts)
+    local entries, err = run_lookup(ui, word, opts)
     if not entries then return nil, err end
     return entries[1]
 end
@@ -270,14 +341,20 @@ end
 -- Look up word; if multiple dictionary hits, let the user pick one.
 -- opts.preferred_dictionary — prefer entries from this StarDict name
 -- opts.auto_pick — when true, use preferred/first entry without showing the menu
+-- opts.exclude_dictionary — never offer this StarDict (e.g. etymology dictionary)
 function DictionaryLookup.pick(ui, word, on_select, opts)
     opts = opts or {}
-    local entries, err = run_lookup(ui, word)
+    local preferred = opts.preferred_dictionary
+    local exclude = opts.exclude_dictionary
+    -- Never exclude the definition dictionary we are explicitly preferring.
+    if exclude and exclude ~= "" and exclude == preferred then
+        exclude = nil
+    end
+    local entries, err = run_lookup(ui, word, { exclude_dictionary = exclude })
     if not entries then
         return nil, err
     end
 
-    local preferred = opts.preferred_dictionary
     if preferred and preferred ~= "" then
         local filtered = {}
         for _i, entry in ipairs(entries) do

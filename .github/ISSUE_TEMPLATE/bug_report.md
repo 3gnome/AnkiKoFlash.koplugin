@@ -23,8 +23,7 @@ What you expected to happen instead.
 
 - Device / platform: (Kobo / Kindle / desktop emulator / AppImage)
 - KOReader version:
-- AnkiKOAi version (`_meta.lua` `version`):
-- AI provider (if relevant): (DashScope / Gemini / OpenAI / OpenRouter / none)
+- AnkiKoFlash version (`_meta.lua` `version`):
 - Anki + AnkiConnect version:
 
 ## Logs

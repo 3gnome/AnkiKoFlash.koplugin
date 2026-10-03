@@ -13,6 +13,10 @@ local CardFields       = require("card_fields")
 local CardStorage      = require("card_storage")
 local NoteTypeProfiles = require("note_type_profiles")
 local ReadingLocation  = require("reading_location")
+local MemorizationPolicy = require("memorization_policy")
+local MemorizationResult = require("memorization_result")
+local PrivacyLog         = require("privacy_log")
+local PluginConstants    = require("plugin_constants")
 local util             = require("util")
 
 local CardDefaults     = require("card_defaults")
@@ -141,6 +145,11 @@ function PoetryMemorize.build_send_summary(cfg, lines, deck, meta)
     if cfg.replace_duplicates then
         body = body .. _("• Replace existing cards in this deck\n")
     end
+    if MemorizationPolicy.requires_confirmation(
+        #lines, cfg.max_memorization_steps) then
+        body = body .. _("• Large passage: all ") .. tostring(#lines)
+            .. _(" steps will be sent (none will be truncated)\n")
+    end
     if preview ~= "" then
         body = body .. _("• First chunk: \"") .. preview .. "\"\n"
     end
@@ -215,6 +224,7 @@ function PoetryMemorize.config(base)
         context_lines             = 3,
         context_cumulative        = false,
         max_words_per_unit        = 7,
+        max_memorization_steps    = MemorizationPolicy.DEFAULT_MAX_STEPS,
         auto_create_deck          = true,
         include_full_recitation   = true,
         force_verse_lines         = false,
@@ -246,6 +256,10 @@ function PoetryMemorize.config(base)
     end
     if anki.memorize_max_words then
         cfg.max_words_per_unit = tonumber(anki.memorize_max_words) or cfg.max_words_per_unit
+    end
+    if anki.max_memorization_steps then
+        cfg.max_memorization_steps = MemorizationPolicy.max_steps(
+            anki.max_memorization_steps)
     end
     if anki.memorize_tags and type(anki.memorize_tags) == "table" then
         cfg.tags = anki.memorize_tags
@@ -279,6 +293,14 @@ function PoetryMemorize.config(base)
         cfg.sync_after_send = anki.sync_after_send
     end
     return cfg
+end
+
+function PoetryMemorize.requires_step_confirmation(lines_or_count, cfg)
+    local count = type(lines_or_count) == "table" and #lines_or_count
+        or tonumber(lines_or_count) or 0
+    cfg = cfg or {}
+    return MemorizationPolicy.requires_confirmation(
+        count, cfg.max_memorization_steps)
 end
 
 function PoetryMemorize.split_lines(text)
@@ -317,6 +339,31 @@ local function split_word_chunks(text, max_words)
     return chunks
 end
 
+local SENTENCE_ABBREV = {
+    mr = true, mrs = true, ms = true, dr = true, st = true, sr = true, jr = true,
+    prof = true, vs = true, etc = true, approx = true, fig = true, no = true,
+}
+
+-- A "." is a sentence boundary unless it sits between two digits (a decimal)
+-- or closes a common abbreviation ("Mr.", "Dr.", "e.g."). Prevents "Mr. Smith"
+-- and "3.14" from being split mid-sentence.
+local function period_is_boundary(text, i)
+    local prev = i > 1 and text:sub(i - 1, i - 1) or ""
+    local nxt = i < #text and text:sub(i + 1, i + 1) or ""
+    if prev:match("%d") and nxt:match("%d") then
+        return false
+    end
+    local j = i - 1
+    while j >= 1 and text:sub(j, j):match("%a") do j = j - 1 end
+    if SENTENCE_ABBREV[text:sub(j + 1, i - 1):lower()] then
+        return false
+    end
+    if i >= 3 and text:sub(i - 2, i - 1):match("^%.[a-z]$") then
+        return false
+    end
+    return true
+end
+
 local function split_sentences(text)
     local out = {}
     text = text:match("^%s*(.-)%s*$") or ""
@@ -327,7 +374,9 @@ local function split_sentences(text)
     local i = 1
     while i <= len do
         local ch = text:sub(i, i)
-        if ch == "." or ch == "!" or ch == "?" or ch == ";" then
+        local boundary = ch == "!" or ch == "?" or ch == ";"
+            or (ch == "." and period_is_boundary(text, i))
+        if boundary then
             local j = i + 1
             if j <= len and text:sub(j, j):match("[\"']") then j = j + 1 end
             if j > len or text:sub(j, j):match("%s") then
@@ -521,8 +570,25 @@ end
 function PoetryMemorize.send_lines(lines, base_config, meta, done)
     meta = meta or {}
     local cfg = PoetryMemorize.config(base_config)
-    if not cfg.url or cfg.url == "" or cfg.url:find("192%.168%.x%.x") then
-        if done then done(nil, _("Anki URL not set. Use AnkiKOAi → Settings.")) end
+    if PoetryMemorize.requires_step_confirmation(lines, cfg)
+        and not meta.threshold_confirmed then
+        if done then
+            done(nil, _("This passage has ") .. tostring(#lines)
+                .. _(" steps and requires confirmation before sending all of them."),
+                {
+                    total = #lines
+                        + (cfg.include_full_recitation ~= false and 1 or 0),
+                    step_count = #lines,
+                    max_steps = cfg.max_memorization_steps,
+                    requires_confirmation = true,
+                    all_sent = false,
+                    partial = false,
+                })
+        end
+        return
+    end
+    if PluginConstants.is_placeholder_anki_url(cfg.url) then
+        if done then done(nil, _("Anki URL not set. Use AnkiKoFlash → Settings.")) end
         return
     end
 
@@ -550,6 +616,10 @@ function PoetryMemorize.send_lines(lines, base_config, meta, done)
         tags                    = cfg.tags,
     })
 
+    local total = #notes
+    local info = MemorizationResult.from_counts(total, 0, 0, 0)
+    info.deck = deck
+
     if cfg.auto_create_deck then
         local ok_deck, err_deck = AnkiSync.ensure_deck(cfg.url, deck)
         if not ok_deck then
@@ -558,43 +628,121 @@ function PoetryMemorize.send_lines(lines, base_config, meta, done)
         end
     end
 
-    local sent, failed = 0, 0
-    local last_err = nil
-    local batch_sent, batch_failed, batch_err = AnkiSync.add_notes_batch(cfg.url, notes)
-    if batch_sent == nil then
-        if done then done(nil, batch_err or _("Send failed")) end
-        return
-    end
-    sent = batch_sent
-    failed = batch_failed or 0
-    last_err = batch_err
-
-    if sent == 0 then
-        if done then done(nil, last_err or _("No notes sent")) end
+    local existing, existing_err =
+        AnkiSync.find_existing_memorization_notes(cfg.url, notes)
+    if not existing then
+        if done then
+            done(nil, _("Could not check existing memorization cards: ")
+                .. (existing_err or _("Send failed")), info)
+        end
         return
     end
 
-    local saved = CardStorage.load_anki_settings() or {}
-    saved.last_memorize_deck = deck
-    CardStorage.save_anki_settings(saved)
-
-    local msg = tostring(sent) .. _(" cards sent to ") .. deck
-    if failed > 0 then
-        msg = msg .. " (" .. tostring(failed) .. _(" failed") .. ")"
+    local pending = {}
+    local remaining_existing = {}
+    for identity, count in pairs(existing) do
+        remaining_existing[identity] = count
     end
-    msg = msg .. AnkiSync.sync_status_suffix(cfg)
-    if done then done(true, msg, { deck = deck, sent = sent, failed = failed }) end
+    for _, note in ipairs(notes) do
+        local identity = AnkiSync.memorization_note_identity(note)
+        local count = remaining_existing[identity] or 0
+        if count > 0 then
+            remaining_existing[identity] = count - 1
+            info.already_present = info.already_present + 1
+        else
+            pending[#pending + 1] = note
+        end
+    end
+
+    local batch_sent, _batch_failed, batch_err =
+        AnkiSync.add_notes_batch(cfg.url, pending)
+    info.sent = batch_sent or 0
+
+    -- Re-read exact fields after every write attempt. This verifies ambiguous
+    -- timeouts and makes a retained partial passage safe to retry.
+    local final_existing, verify_err =
+        AnkiSync.find_existing_memorization_notes(cfg.url, notes)
+    local confirmed = info.already_present + info.sent
+    if final_existing then
+        confirmed = 0
+        local available = {}
+        for identity, count in pairs(final_existing) do available[identity] = count end
+        for _, note in ipairs(notes) do
+            local identity = AnkiSync.memorization_note_identity(note)
+            local count = available[identity] or 0
+            if count > 0 then
+                available[identity] = count - 1
+                confirmed = confirmed + 1
+            end
+        end
+        info.verified = math.max(
+            0, confirmed - info.already_present - info.sent)
+    end
+    local final_info = MemorizationResult.from_counts(
+        total, info.sent, info.already_present, confirmed)
+    final_info.deck = deck
+    info = final_info
+
+    if confirmed > 0 then
+        local saved = CardStorage.load_anki_settings() or {}
+        saved.last_memorize_deck = deck
+        CardStorage.save_anki_settings(saved)
+    end
+
+    local msg
+    if info.all_sent then
+        if info.sent == total then
+            msg = tostring(info.sent) .. _(" cards sent to ") .. deck
+        elseif info.sent == 0 then
+            msg = tostring(total) .. _(" cards already in Anki in ") .. deck
+        else
+            msg = tostring(info.sent) .. _(" cards sent, ")
+                .. tostring(total - info.sent) .. _(" already in Anki — ") .. deck
+        end
+    else
+        PrivacyLog.warn("memorization_partial_send", {
+            confirmed = confirmed,
+            failed = info.failed,
+            total = total,
+        })
+        msg = _("Memorization send incomplete: ") .. tostring(confirmed)
+            .. "/" .. tostring(total) .. _(" cards confirmed in Anki, ")
+            .. tostring(info.failed) .. _(" failed. Passage kept pending.")
+        local detail = batch_err or verify_err
+        if detail and detail ~= "" then msg = msg .. " " .. detail end
+    end
+    if confirmed > info.already_present then
+        msg = msg .. AnkiSync.sync_status_suffix(cfg)
+    end
+    if done then done(info.all_sent and true or nil, msg, info) end
 end
 
 function PoetryMemorize.send_highlight(base_config, text, ui, meta, done)
+    meta = meta or {}
     local cfg = PoetryMemorize.config(base_config)
     local lines = PoetryMemorize.split_units(PoetryMemorize.prepare_text(text), cfg)
     if #lines == 0 then
         if done then done(nil, _("No text to memorize.")) end
         return
     end
+    if PoetryMemorize.requires_step_confirmation(lines, cfg)
+        and not meta.threshold_confirmed then
+        if done then
+            done(nil, _("This passage has ") .. tostring(#lines)
+                .. _(" steps and requires confirmation before sending all of them."),
+                {
+                    total = #lines
+                        + (cfg.include_full_recitation ~= false and 1 or 0),
+                    step_count = #lines,
+                    max_steps = cfg.max_memorization_steps,
+                    requires_confirmation = true,
+                    all_sent = false,
+                    partial = false,
+                })
+        end
+        return
+    end
 
-    meta = meta or {}
     if not meta.source then
         local book = CardFields.format_book_source(meta.book_title, meta.book_author)
         meta.source = ReadingLocation.append_to_source(book, ui)
@@ -608,15 +756,16 @@ function PoetryMemorize.send_highlight(base_config, text, ui, meta, done)
     PoetryMemorize.send_lines(lines, base_config, meta, done)
 end
 
-local function save_pending_or_notify(text, ui, meta, deck)
+local function save_pending_or_notify(text, ui, meta, deck, success_message)
     if not meta.source then
         local book = CardFields.format_book_source(meta.book_title, meta.book_author)
         meta.source = ReadingLocation.append_to_source(book, ui)
     end
     if CardStorage.save_memorization_pending(text, meta, deck) then
         UIManager:show(Notification:new {
-            text    = _("Saved locally. Send from My Cards when Anki is available."),
-            timeout = 5,
+            text    = success_message
+                or _("Saved locally. Send from My Cards when Anki is available."),
+            timeout = success_message and 8 or 5,
         })
         return true
     end
@@ -651,16 +800,31 @@ function PoetryMemorize.send_immediate(base_config, text, ui, meta, done)
     }
     UIManager:show(loading)
     UIManager:scheduleIn(0.05, function()
-        PoetryMemorize.send_highlight(base_config, prepared, ui, meta, function(ok, err_or_msg)
+        PoetryMemorize.send_highlight(base_config, prepared, ui, meta,
+            function(ok, err_or_msg, info)
             UIManager:close(loading)
             if ok then
                 UIManager:show(Notification:new { text = err_or_msg, timeout = 5 })
-                if done then done(true, err_or_msg) end
+                if done then done(true, err_or_msg, info) end
+                return
+            end
+            if info and info.partial then
+                MemorizationResult.persist_partial_before_callback(
+                    info,
+                    function()
+                        return save_pending_or_notify(prepared, ui, meta, deck,
+                            (err_or_msg or _("Memorization send incomplete."))
+                            .. "\n\n" .. _(
+                                "Passage kept pending. Retry from My Cards to send only the remaining cards."))
+                    end,
+                    function()
+                        if done then done(false, err_or_msg, info) end
+                    end)
                 return
             end
             if cfg.auto_save_on_fail then
                 save_pending_or_notify(prepared, ui, meta, deck)
-                if done then done(false, err_or_msg) end
+                if done then done(false, err_or_msg, info) end
                 return
             end
             UIManager:show(InfoMessage:new {
@@ -668,7 +832,7 @@ function PoetryMemorize.send_immediate(base_config, text, ui, meta, done)
                     .. "\n\n" .. _("Use Save for later to queue on this device."),
                 timeout = 8,
             })
-            if done then done(nil, err_or_msg) end
+            if done then done(nil, err_or_msg, info) end
         end)
     end)
 end
@@ -676,12 +840,12 @@ end
 local function show_memorize_send_confirm(base_config, text, ui, meta, cfg, lines, deck)
     local body = PoetryMemorize.build_send_summary(cfg, lines, deck, meta)
 
-    if cfg.url and cfg.url ~= "" and not cfg.url:find("192%.168%.x%.x") and not cfg.replace_duplicates then
+    if not PluginConstants.is_placeholder_anki_url(cfg.url) and not cfg.replace_duplicates then
         local existing, err = AnkiSync.count_notes_in_deck(cfg.url, deck)
         if existing and existing > 0 then
             body = _("This book and page already have cards in Anki (")
                 .. tostring(existing) .. _(" in this deck).\n\n")
-                .. _("Sending again adds duplicate step/full cards.\n")
+                .. _("Exact matching steps are skipped; changed passages may add cards.\n")
                 .. _("Enable Replace existing cards in Memorization settings to overwrite.\n\n")
                 .. body
         elseif err then
@@ -700,16 +864,29 @@ local function show_memorize_send_confirm(base_config, text, ui, meta, cfg, line
         buttons_table = {
             {{ text = _("Send to Anki"), callback = function()
                 UIManager:close(dlg)
+                meta.threshold_confirmed = true
                 local loading = Notification:new {
                     text    = _("Sending memorization cards…"),
                     timeout = 120,
                 }
                 UIManager:show(loading)
                 UIManager:scheduleIn(0.05, function()
-                    PoetryMemorize.send_highlight(base_config, text, ui, meta, function(ok, err_or_msg)
+                    PoetryMemorize.send_highlight(base_config, text, ui, meta,
+                        function(ok, err_or_msg, info)
                         UIManager:close(loading)
                         if ok then
                             UIManager:show(Notification:new { text = err_or_msg, timeout = 5 })
+                        elseif info and info.partial then
+                            MemorizationResult.persist_partial_before_callback(
+                                info,
+                                function()
+                                    return save_pending_or_notify(text, ui, meta, deck,
+                                        (err_or_msg or _("Memorization send incomplete."))
+                                        .. "\n\n" .. _(
+                                            "Passage kept pending. Retry from My Cards to send only the remaining cards."))
+                                end,
+                                meta.on_done)
+                            return
                         else
                             UIManager:show(InfoMessage:new {
                                 text    = (err_or_msg or _("Send failed"))
@@ -756,9 +933,11 @@ function PoetryMemorize.confirm_and_send(base_config, text, ui, meta)
     meta.piece_label = meta.piece_label or PoetryMemorize.derive_piece_label(meta, lines)
     local deck = meta.deck
         or PoetryMemorize.resolve_deck(cfg, meta.book_title, meta.piece_label)
+    local requires_confirmation =
+        PoetryMemorize.requires_step_confirmation(lines, cfg)
 
     local function after_intro()
-        if cfg.auto_send then
+        if cfg.auto_send and not requires_confirmation then
             PoetryMemorize.send_immediate(base_config, prepared, ui, meta, function()
                 if meta.on_done then meta.on_done() end
             end)

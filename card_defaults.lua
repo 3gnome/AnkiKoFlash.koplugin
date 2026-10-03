@@ -1,4 +1,4 @@
--- Per card-type defaults and auto-send flags (saved in ankikooai_settings.json).
+-- Per card-type defaults and auto-send flags (saved in ankikoflash_settings.json).
 
 local CardFields       = require("card_fields")
 local NoteTypeProfiles = require("note_type_profiles")
@@ -8,10 +8,6 @@ local CardDefaults = {}
 
 function CardDefaults.merged(config)
     return CardFields.merged_anki_settings(config)
-end
-
-function CardDefaults.wiki_model(config)
-    return CardFields.default_wiki_model(config)
 end
 
 function CardDefaults.vocabulary_model(config)
@@ -24,12 +20,6 @@ end
 
 local function legacy_deck(ac)
     return (ac.deck and ac.deck ~= "") and ac.deck or nil
-end
-
-function CardDefaults.wiki_deck(config)
-    local ac = CardDefaults.merged(config)
-    if ac.wiki_deck and ac.wiki_deck ~= "" then return ac.wiki_deck end
-    return legacy_deck(ac)
 end
 
 function CardDefaults.vocabulary_deck(config)
@@ -50,13 +40,11 @@ function CardDefaults.deck_for_card(config, card)
     if model and model ~= "" then
         if NoteTypeProfiles.is_vocabulary_card(model) then
             return CardDefaults.vocabulary_deck(wrapped)
-        elseif NoteTypeProfiles.is_wiki_card(model) then
-            return CardDefaults.wiki_deck(wrapped)
         elseif NoteTypeProfiles.is_memorization(model) then
             return CardDefaults.memorization_parent_deck(wrapped)
         end
     end
-    return CardDefaults.wiki_deck(wrapped) or CardDefaults.vocabulary_deck(wrapped)
+    return CardDefaults.vocabulary_deck(wrapped)
 end
 
 -- Distinct configured deck names (for picker fallbacks).
@@ -64,7 +52,6 @@ function CardDefaults.configured_deck_names(config)
     local wrapped = wrap_config(config)
     local names, seen = {}, {}
     for _i, fn in ipairs({
-        CardDefaults.wiki_deck,
         CardDefaults.vocabulary_deck,
         CardDefaults.memorization_parent_deck,
     }) do
@@ -95,14 +82,27 @@ function CardDefaults.vocabulary_dictionary(config)
     return nil
 end
 
-function CardDefaults.auto_send_wiki(config)
+function CardDefaults.etymology_dictionary(config)
     local ac = CardDefaults.merged(config)
-    return ac.auto_send_wiki == true
+    local name = ac.etymology_preferred_dictionary
+    if name and name ~= "" then return name end
+    return nil
 end
 
 function CardDefaults.auto_send_vocabulary(config)
     local ac = CardDefaults.merged(config)
     return ac.auto_send_vocabulary == true
+end
+
+function CardDefaults.save_only_vocabulary(config)
+    local ac = CardDefaults.merged(config)
+    return ac.save_only_vocabulary == true
+end
+
+-- Hands-off auto flow: skip note-type + dictionary pickers without sending.
+function CardDefaults.vocab_auto_flow(config)
+    return CardDefaults.auto_send_vocabulary(config)
+        or CardDefaults.save_only_vocabulary(config)
 end
 
 function CardDefaults.auto_send_memorization(config)
@@ -128,11 +128,6 @@ local function trimmed_hub_label(value, fallback)
     return fallback
 end
 
-function CardDefaults.wiki_hub_label(config)
-    local ac = CardDefaults.merged(config)
-    return trimmed_hub_label(ac.wiki_card_hub_label, PluginConstants.WIKI_CARD_LABEL)
-end
-
 function CardDefaults.vocabulary_hub_label(config)
     local ac = CardDefaults.merged(config)
     return trimmed_hub_label(ac.vocabulary_card_hub_label, PluginConstants.VOCABULARY_CARD_LABEL)
@@ -142,9 +137,7 @@ end
 function CardDefaults.should_flatten_hub(config, card_kind)
     local ac = CardDefaults.merged(config)
     if ac.auto_send_skip_hub_submenu == true then
-        if card_kind == "wiki" then
-            return CardDefaults.auto_send_wiki(config)
-        elseif card_kind == "vocabulary" then
+        if card_kind == "vocabulary" then
             return CardDefaults.auto_send_vocabulary(config)
         elseif card_kind == "memorization" then
             return CardDefaults.auto_send_memorization(config)
