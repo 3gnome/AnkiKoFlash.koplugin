@@ -4,7 +4,7 @@ This file records notable changes. Historical releases are documented in
 [`docs/release-notes-v1.0.9.md`](docs/release-notes-v1.0.9.md) and
 [`docs/release-notes-v1.1.1.md`](docs/release-notes-v1.1.1.md).
 
-## Unreleased
+## 1.2.0 (2026-10-03)
 
 ### Fixed (P0 — data loss / regressions)
 - Bounded 412-conflict retry — new `anki_retry.lua` caps retries instead of looping

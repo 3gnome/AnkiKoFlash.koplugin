@@ -2,7 +2,7 @@
 
 ## What the plugin is
 
-**AnkiKoFlash** ([`AnkiKoFlash.koplugin`](../), v1.1.1) is a KOReader plugin that turns reading highlights into Anki cards and sends them over Wi‑Fi via **AnkiConnect**.
+**AnkiKoFlash** ([`AnkiKoFlash.koplugin`](../), v1.2.0) is a KOReader plugin that turns reading highlights into Anki cards and sends them over Wi‑Fi via **AnkiConnect**.
 
 **Reading flow:**
 
